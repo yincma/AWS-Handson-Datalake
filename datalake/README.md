@@ -15,16 +15,89 @@
 - **分析エンジン**: Amazon Athena (サーバーレス SQL クエリ)
 
 ### 三層データレイクアーキテクチャ
-```
-Raw Layer (生データ)     →    Clean Layer (洗浄データ)    →    Analytics Layer (分析データ)
-       ↓                            ↓                           ↓
-   Glue Crawler                 Glue DataBrew              EMR Spark Jobs
-       ↓                            ↓                           ↓
-   Schema 発見                   データ洗浄変換                  集約分析計算
-       ↓                            ↓                           ↓
-                        Lake Formation Data Catalog
-                                     ↓
-                            Athena 対話式クエリ
+
+```mermaid
+flowchart TD
+    %% Data Sources
+    SD[サンプルデータ<br/>customers.csv<br/>orders.csv<br/>order_items.csv<br/>products.csv] --> RawBucket
+
+    %% Storage Layer
+    subgraph S3["🗄️ S3 Storage Layer"]
+        RawBucket["📦 Raw Data Bucket<br/>dl-handson-raw-dev"]
+        CleanBucket["🧹 Clean Data Bucket<br/>dl-handson-clean-dev"]
+        AnalyticsBucket["📊 Analytics Data Bucket<br/>dl-handson-analytics-dev"]
+        AthenaResults["🔍 Athena Results Bucket<br/>dl-handson-athena-results-dev"]
+    end
+
+    %% Processing Services
+    subgraph Processing["⚙️ Data Processing Services"]
+        GlueCrawlerRaw["🔍 Glue Crawler (Raw)<br/>Schema Discovery"]
+        GlueCrawlerClean["🔍 Glue Crawler (Clean)<br/>Schema Update"]
+        GlueDataBrew["🧪 Glue DataBrew<br/>Visual Data Preparation"]
+        EMRCluster["⚡ EMR Cluster<br/>PySpark Analytics"]
+    end
+
+    %% Data Governance
+    subgraph Governance["🛡️ Data Governance & Catalog"]
+        LakeFormation["🏛️ Lake Formation<br/>Data Governance"]
+        GlueDataCatalog["📚 Glue Data Catalog<br/>Metadata Management"]
+        IAMRoles["👥 IAM Roles<br/>• LabAdmin<br/>• DataEngineer<br/>• Analyst<br/>• GlueCrawler<br/>• EMRService"]
+    end
+
+    %% Analytics Services
+    subgraph Analytics["📈 Analytics & Query"]
+        Athena["🔍 Athena<br/>Interactive SQL Queries"]
+        QuickSight["📊 QuickSight<br/>Business Intelligence<br/>(Optional)"]
+    end
+
+    %% Data Flow
+    RawBucket --> GlueCrawlerRaw
+    GlueCrawlerRaw --> GlueDataCatalog
+    RawBucket --> GlueDataBrew
+    GlueDataBrew --> CleanBucket
+    CleanBucket --> GlueCrawlerClean
+    GlueCrawlerClean --> GlueDataCatalog
+    CleanBucket --> EMRCluster
+    EMRCluster --> AnalyticsBucket
+
+    %% Query Layer
+    GlueDataCatalog --> Athena
+    RawBucket -.-> Athena
+    CleanBucket --> Athena
+    AnalyticsBucket --> Athena
+    Athena --> AthenaResults
+    Athena -.-> QuickSight
+
+    %% Governance Integration
+    LakeFormation --> GlueDataCatalog
+    LakeFormation --> RawBucket
+    LakeFormation --> CleanBucket
+    LakeFormation --> AnalyticsBucket
+    IAMRoles --> LakeFormation
+    IAMRoles --> Processing
+    IAMRoles --> Analytics
+
+    %% Infrastructure
+    subgraph Infrastructure["🏗️ Infrastructure as Code"]
+        CloudFormation["☁️ CloudFormation Templates<br/>• S3 Storage Layer<br/>• IAM Roles & Policies<br/>• Lake Formation<br/>• Cost Monitoring"]
+    end
+
+    CloudFormation -.-> S3
+    CloudFormation -.-> Governance
+    CloudFormation -.-> Processing
+
+    %% Styling
+    classDef storage fill:#e1f5fe
+    classDef processing fill:#f3e5f5
+    classDef governance fill:#e8f5e8
+    classDef analytics fill:#fff3e0
+    classDef infrastructure fill:#fce4ec
+
+    class RawBucket,CleanBucket,AnalyticsBucket,AthenaResults storage
+    class GlueCrawlerRaw,GlueCrawlerClean,GlueDataBrew,EMRCluster processing
+    class LakeFormation,GlueDataCatalog,IAMRoles governance
+    class Athena,QuickSight analytics
+    class CloudFormation infrastructure
 ```
 
 ### 権限とガバナンスモデル
