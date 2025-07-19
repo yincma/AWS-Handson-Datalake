@@ -14,105 +14,85 @@
 - **計算エンジン**: Amazon EMR (Spark分散計算)
 - **分析エンジン**: Amazon Athena (サーバーレス SQL クエリ)
 
-### 三層データレイクアーキテクチャ
+### システムアーキテクチャ概要
 
 ```mermaid
-graph TB
-    %% Data Sources
-    subgraph DataSources[" "]
-        SD["📄 Sample Data<br/>• customers.csv<br/>• orders.csv<br/>• order_items.csv<br/>• products.csv"]
-    end
-
-    %% Data Lake Storage Layers
-    subgraph DataLake["Amazon S3 Data Lake"]
-        direction TB
-        Raw["🗃️ Raw Layer<br/>dl-handson-raw-dev<br/><i>Bronze Tier</i>"]
-        Clean["✨ Clean Layer<br/>dl-handson-clean-dev<br/><i>Silver Tier</i>"]
-        Analytics["📊 Analytics Layer<br/>dl-handson-analytics-dev<br/><i>Gold Tier</i>"]
-        
-        Raw --> Clean
-        Clean --> Analytics
-    end
-
-    %% Processing & ETL Services
-    subgraph AWSGlue["AWS Glue"]
-        Crawler1["🔍 Glue Crawler<br/><i>Raw Data Discovery</i>"]
-        DataBrew["🧪 Glue DataBrew<br/><i>Visual Data Preparation</i>"]
-        Catalog["📚 Glue Data Catalog<br/><i>Metadata Repository</i>"]
-    end
-
-    subgraph EMR["Amazon EMR"]
-        EMRCluster["⚡ EMR Cluster<br/><i>PySpark Analytics<br/>m5.xlarge × 3</i>"]
-    end
-
-    %% Analytics & Query Services
-    subgraph QueryServices["Query & Analytics"]
-        Athena["🔍 Amazon Athena<br/><i>Serverless SQL</i>"]
-        AthenaResults["📋 Query Results<br/>dl-handson-athena-results"]
-        QuickSight["📈 Amazon QuickSight<br/><i>Business Intelligence</i><br/>(Optional)"]
-    end
-
-    %% Security & Governance
-    subgraph Security["Security & Governance"]
-        LakeFormation["🛡️ AWS Lake Formation<br/><i>Data Lake Security</i>"]
-        IAM["👥 AWS IAM<br/><i>Role-based Access</i><br/>• Data Engineer<br/>• Analyst<br/>• Lab Admin"]
-    end
-
-    %% Infrastructure as Code
-    subgraph IaC["Infrastructure"]
-        CloudFormation["☁️ AWS CloudFormation<br/><i>Infrastructure as Code</i><br/>• S3 Storage<br/>• IAM Policies<br/>• Lake Formation<br/>• Cost Monitoring"]
-    end
-
-    %% Data Flow Connections
-    SD --> Raw
-    Raw --> Crawler1
-    Raw --> DataBrew
-    Crawler1 --> Catalog
-    DataBrew --> Clean
-    Clean --> EMRCluster
-    EMRCluster --> Analytics
+graph LR
+    %% Core Components
+    S3["🗄️ Amazon S3<br/><i>3-Layer Storage</i>"]
+    Glue["🔧 AWS Glue<br/><i>ETL & Catalog</i>"]
+    EMR["⚡ Amazon EMR<br/><i>Spark Processing</i>"]
+    Athena["🔍 Amazon Athena<br/><i>SQL Analytics</i>"]
+    LF["🛡️ Lake Formation<br/><i>Data Governance</i>"]
     
-    %% Query Connections
-    Catalog --> Athena
-    Raw -.-> Athena
-    Clean --> Athena
-    Analytics --> Athena
-    Athena --> AthenaResults
-    Athena -.-> QuickSight
+    %% Simple Connections
+    S3 --> Glue
+    Glue --> EMR
+    EMR --> S3
+    S3 --> Athena
+    LF --> S3
+    
+    %% AWS Styling
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
+    class S3,Glue,EMR,Athena,LF aws
+```
 
-    %% Governance Connections
-    LakeFormation --> Catalog
-    LakeFormation --> Raw
-    LakeFormation --> Clean
-    LakeFormation --> Analytics
-    IAM --> LakeFormation
-    IAM --> AWSGlue
-    IAM --> EMR
-    IAM --> QueryServices
+### データフロー詳細図
 
-    %% Infrastructure Connections
-    CloudFormation -.-> DataLake
-    CloudFormation -.-> Security
-    CloudFormation -.-> AWSGlue
-    CloudFormation -.-> EMR
+```mermaid
+flowchart TD
+    %% Data Sources
+    Start([データソース]) --> Upload[サンプルデータアップロード]
+    Upload --> RawBucket[📦 Raw Layer<br/>Bronze Tier]
 
-    %% AWS Official Color Scheme
-    classDef s3 fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
-    classDef glue fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
-    classDef emr fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
-    classDef analytics fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
-    classDef security fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
-    classDef infra fill:#232F3E,stroke:#FF9900,stroke-width:2px,color:#FF9900
-    classDef data fill:#E8F4FD,stroke:#146EB4,stroke-width:2px,color:#146EB4
+    %% Discovery Phase
+    RawBucket --> Crawler[🔍 Glue Crawler]
+    Crawler --> Schema[スキーマ発見]
+    Schema --> Catalog[📚 Data Catalog<br/>メタデータ登録]
 
-    %% Apply Styles
-    class Raw,Clean,Analytics,AthenaResults s3
-    class Crawler1,DataBrew,Catalog glue
-    class EMRCluster emr
-    class Athena,QuickSight analytics
-    class LakeFormation,IAM security
-    class CloudFormation infra
-    class SD data
+    %% Cleaning Phase  
+    RawBucket --> DataBrew[🧪 Glue DataBrew]
+    DataBrew --> Clean[データクリーニング]
+    Clean --> CleanBucket[✨ Clean Layer<br/>Silver Tier]
+
+    %% Analytics Phase
+    CleanBucket --> EMR[⚡ EMR Cluster]
+    EMR --> Process[PySpark処理<br/>集約・分析]
+    Process --> AnalyticsBucket[📊 Analytics Layer<br/>Gold Tier]
+
+    %% Query Phase
+    Catalog --> Athena[🔍 Amazon Athena]
+    CleanBucket --> Athena
+    AnalyticsBucket --> Athena
+    Athena --> Results[📋 クエリ結果]
+    
+    %% Business Intelligence
+    Results --> BI[📈 BI ダッシュボード<br/>QuickSight]
+
+    %% Governance Layer
+    subgraph Governance[🛡️ データガバナンス]
+        LakeFormation[Lake Formation<br/>権限管理]
+        IAM[IAM ロール<br/>アクセス制御]
+    end
+    
+    LakeFormation -.-> RawBucket
+    LakeFormation -.-> CleanBucket  
+    LakeFormation -.-> AnalyticsBucket
+    IAM -.-> EMR
+    IAM -.-> Athena
+
+    %% Processing Phases
+    classDef bronze fill:#CD7F32,stroke:#8B4513,stroke-width:2px,color:white
+    classDef silver fill:#C0C0C0,stroke:#808080,stroke-width:2px,color:#000
+    classDef gold fill:#FFD700,stroke:#DAA520,stroke-width:2px,color:#000
+    classDef process fill:#87CEEB,stroke:#4682B4,stroke-width:2px,color:#000
+    classDef governance fill:#98FB98,stroke:#228B22,stroke-width:2px,color:#000
+
+    class RawBucket bronze
+    class CleanBucket silver
+    class AnalyticsBucket gold
+    class Crawler,DataBrew,EMR,Athena process
+    class LakeFormation,IAM governance
 ```
 
 ### 権限とガバナンスモデル
