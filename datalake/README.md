@@ -17,87 +17,102 @@
 ### 三層データレイクアーキテクチャ
 
 ```mermaid
-flowchart TD
+graph TB
     %% Data Sources
-    SD[サンプルデータ<br/>customers.csv<br/>orders.csv<br/>order_items.csv<br/>products.csv] --> RawBucket
-
-    %% Storage Layer
-    subgraph S3["🗄️ S3 Storage Layer"]
-        RawBucket["📦 Raw Data Bucket<br/>dl-handson-raw-dev"]
-        CleanBucket["🧹 Clean Data Bucket<br/>dl-handson-clean-dev"]
-        AnalyticsBucket["📊 Analytics Data Bucket<br/>dl-handson-analytics-dev"]
-        AthenaResults["🔍 Athena Results Bucket<br/>dl-handson-athena-results-dev"]
+    subgraph DataSources[" "]
+        SD["📄 Sample Data<br/>• customers.csv<br/>• orders.csv<br/>• order_items.csv<br/>• products.csv"]
     end
 
-    %% Processing Services
-    subgraph Processing["⚙️ Data Processing Services"]
-        GlueCrawlerRaw["🔍 Glue Crawler (Raw)<br/>Schema Discovery"]
-        GlueCrawlerClean["🔍 Glue Crawler (Clean)<br/>Schema Update"]
-        GlueDataBrew["🧪 Glue DataBrew<br/>Visual Data Preparation"]
-        EMRCluster["⚡ EMR Cluster<br/>PySpark Analytics"]
+    %% Data Lake Storage Layers
+    subgraph DataLake["Amazon S3 Data Lake"]
+        direction TB
+        Raw["🗃️ Raw Layer<br/>dl-handson-raw-dev<br/><i>Bronze Tier</i>"]
+        Clean["✨ Clean Layer<br/>dl-handson-clean-dev<br/><i>Silver Tier</i>"]
+        Analytics["📊 Analytics Layer<br/>dl-handson-analytics-dev<br/><i>Gold Tier</i>"]
+        
+        Raw --> Clean
+        Clean --> Analytics
     end
 
-    %% Data Governance
-    subgraph Governance["🛡️ Data Governance & Catalog"]
-        LakeFormation["🏛️ Lake Formation<br/>Data Governance"]
-        GlueDataCatalog["📚 Glue Data Catalog<br/>Metadata Management"]
-        IAMRoles["👥 IAM Roles<br/>• LabAdmin<br/>• DataEngineer<br/>• Analyst<br/>• GlueCrawler<br/>• EMRService"]
+    %% Processing & ETL Services
+    subgraph AWSGlue["AWS Glue"]
+        Crawler1["🔍 Glue Crawler<br/><i>Raw Data Discovery</i>"]
+        DataBrew["🧪 Glue DataBrew<br/><i>Visual Data Preparation</i>"]
+        Catalog["📚 Glue Data Catalog<br/><i>Metadata Repository</i>"]
     end
 
-    %% Analytics Services
-    subgraph Analytics["📈 Analytics & Query"]
-        Athena["🔍 Athena<br/>Interactive SQL Queries"]
-        QuickSight["📊 QuickSight<br/>Business Intelligence<br/>(Optional)"]
+    subgraph EMR["Amazon EMR"]
+        EMRCluster["⚡ EMR Cluster<br/><i>PySpark Analytics<br/>m5.xlarge × 3</i>"]
     end
 
-    %% Data Flow
-    RawBucket --> GlueCrawlerRaw
-    GlueCrawlerRaw --> GlueDataCatalog
-    RawBucket --> GlueDataBrew
-    GlueDataBrew --> CleanBucket
-    CleanBucket --> GlueCrawlerClean
-    GlueCrawlerClean --> GlueDataCatalog
-    CleanBucket --> EMRCluster
-    EMRCluster --> AnalyticsBucket
+    %% Analytics & Query Services
+    subgraph QueryServices["Query & Analytics"]
+        Athena["🔍 Amazon Athena<br/><i>Serverless SQL</i>"]
+        AthenaResults["📋 Query Results<br/>dl-handson-athena-results"]
+        QuickSight["📈 Amazon QuickSight<br/><i>Business Intelligence</i><br/>(Optional)"]
+    end
 
-    %% Query Layer
-    GlueDataCatalog --> Athena
-    RawBucket -.-> Athena
-    CleanBucket --> Athena
-    AnalyticsBucket --> Athena
+    %% Security & Governance
+    subgraph Security["Security & Governance"]
+        LakeFormation["🛡️ AWS Lake Formation<br/><i>Data Lake Security</i>"]
+        IAM["👥 AWS IAM<br/><i>Role-based Access</i><br/>• Data Engineer<br/>• Analyst<br/>• Lab Admin"]
+    end
+
+    %% Infrastructure as Code
+    subgraph IaC["Infrastructure"]
+        CloudFormation["☁️ AWS CloudFormation<br/><i>Infrastructure as Code</i><br/>• S3 Storage<br/>• IAM Policies<br/>• Lake Formation<br/>• Cost Monitoring"]
+    end
+
+    %% Data Flow Connections
+    SD --> Raw
+    Raw --> Crawler1
+    Raw --> DataBrew
+    Crawler1 --> Catalog
+    DataBrew --> Clean
+    Clean --> EMRCluster
+    EMRCluster --> Analytics
+    
+    %% Query Connections
+    Catalog --> Athena
+    Raw -.-> Athena
+    Clean --> Athena
+    Analytics --> Athena
     Athena --> AthenaResults
     Athena -.-> QuickSight
 
-    %% Governance Integration
-    LakeFormation --> GlueDataCatalog
-    LakeFormation --> RawBucket
-    LakeFormation --> CleanBucket
-    LakeFormation --> AnalyticsBucket
-    IAMRoles --> LakeFormation
-    IAMRoles --> Processing
-    IAMRoles --> Analytics
+    %% Governance Connections
+    LakeFormation --> Catalog
+    LakeFormation --> Raw
+    LakeFormation --> Clean
+    LakeFormation --> Analytics
+    IAM --> LakeFormation
+    IAM --> AWSGlue
+    IAM --> EMR
+    IAM --> QueryServices
 
-    %% Infrastructure
-    subgraph Infrastructure["🏗️ Infrastructure as Code"]
-        CloudFormation["☁️ CloudFormation Templates<br/>• S3 Storage Layer<br/>• IAM Roles & Policies<br/>• Lake Formation<br/>• Cost Monitoring"]
-    end
+    %% Infrastructure Connections
+    CloudFormation -.-> DataLake
+    CloudFormation -.-> Security
+    CloudFormation -.-> AWSGlue
+    CloudFormation -.-> EMR
 
-    CloudFormation -.-> S3
-    CloudFormation -.-> Governance
-    CloudFormation -.-> Processing
+    %% AWS Official Color Scheme
+    classDef s3 fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
+    classDef glue fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
+    classDef emr fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
+    classDef analytics fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
+    classDef security fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
+    classDef infra fill:#232F3E,stroke:#FF9900,stroke-width:2px,color:#FF9900
+    classDef data fill:#E8F4FD,stroke:#146EB4,stroke-width:2px,color:#146EB4
 
-    %% Styling
-    classDef storage fill:#e1f5fe
-    classDef processing fill:#f3e5f5
-    classDef governance fill:#e8f5e8
-    classDef analytics fill:#fff3e0
-    classDef infrastructure fill:#fce4ec
-
-    class RawBucket,CleanBucket,AnalyticsBucket,AthenaResults storage
-    class GlueCrawlerRaw,GlueCrawlerClean,GlueDataBrew,EMRCluster processing
-    class LakeFormation,GlueDataCatalog,IAMRoles governance
+    %% Apply Styles
+    class Raw,Clean,Analytics,AthenaResults s3
+    class Crawler1,DataBrew,Catalog glue
+    class EMRCluster emr
     class Athena,QuickSight analytics
-    class CloudFormation infrastructure
+    class LakeFormation,IAM security
+    class CloudFormation infra
+    class SD data
 ```
 
 ### 権限とガバナンスモデル
