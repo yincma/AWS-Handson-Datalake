@@ -1,0 +1,16 @@
+customer_id,first_name,last_name,email,phone,address,city,state,zip_code,country,registration_date,last_login,customer_segment,sensitive_ssn
+1001,张,伟,zhangwei@email.com,13812345678,北京市朝阳区建国路1号,北京,北京,100001,中国,2023-01-15,2024-01-10,VIP,123-45-6789
+1002,李,娜,lina@email.com,13912345679,上海市浦东新区世纪大道200号,上海,上海,200001,中国,2023-02-20,2024-01-09,Premium,234-56-7890
+1003,王,强,wangqiang@email.com,13712345680,广州市天河区珠江路300号,广州,广东,510000,中国,2023-03-10,2024-01-08,Standard,345-67-8901
+1004,刘,美,liumei@email.com,,深圳市南山区科技园400号,深圳,广东,518000,中国,2023-04-05,2024-01-07,VIP,456-78-9012
+1005,陈,磊,chenlei@email.com,13612345682,杭州市西湖区文三路500号,杭州,浙江,310000,中国,2023-05-12,2024-01-06,Premium,567-89-0123
+1006,周,丽,zhouli@email.com,13512345683,南京市鼓楼区中山路600号,南京,江苏,210000,中国,2023-06-18,,Standard,678-90-1234
+1007,吴,涛,wutao@email.com,13412345684,武汉市洪山区珞瑜路700号,武汉,湖北,430000,中国,2023-07-25,2024-01-04,VIP,789-01-2345
+1008,郑,莉,zhengli@email.com,13312345685,成都市锦江区春熙路800号,成都,四川,610000,中国,2023-08-30,2024-01-03,Premium,890-12-3456
+1009,朱,昊,zhuhao@email.com,13212345686,西安市雁塔区高新路900号,西安,陕西,710000,中国,2023-09-15,2024-01-02,Standard,901-23-4567
+1010,孙,婷,sunting@email.com,13112345687,天津市和平区南京路1000号,天津,天津,300000,中国,2023-10-20,2024-01-01,VIP,012-34-5678
+1011,John,Smith,john.smith@email.com,1-555-123-4567,123 Main St,New York,NY,10001,USA,2023-11-01,2023-12-30,Premium,111-22-3333
+1012,Emma,Johnson,emma.j@email.com,1-555-234-5678,456 Oak Ave,Los Angeles,CA,90001,USA,2023-11-15,2023-12-29,Standard,222-33-4444
+1013,Michael,Brown,m.brown@email.com,,789 Pine St,Chicago,IL,60601,USA,2023-12-01,2023-12-28,VIP,333-44-5555
+1014,Sarah,Davis,sarah.davis@email.com,1-555-456-7890,321 Elm St,Houston,TX,77001,USA,2023-12-10,2023-12-27,Premium,444-55-6666
+1015,David,Wilson,d.wilson@email.com,1-555-567-8901,654 Maple Dr,Phoenix,AZ,85001,USA,2023-12-20,,Standard,555-66-7777

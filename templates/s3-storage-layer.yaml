@@ -1,0 +1,267 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS Data Lake S3 Storage Layer - Raw, Clean, and Analytics buckets with encryption, versioning, and lifecycle policies'
+
+Parameters:
+  ProjectPrefix:
+    Type: String
+    Default: dl-handson
+    Description: Prefix for all resource names
+    
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment type
+
+Resources:
+  # Raw Layer S3 Bucket
+  RawDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectPrefix}-raw-${Environment}"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: IntelligentTieringRule
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 0
+                StorageClass: INTELLIGENT_TIERING
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Layer
+          Value: Raw
+        - Key: Project
+          Value: DataLake
+
+  # Clean Layer S3 Bucket  
+  CleanDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectPrefix}-clean-${Environment}"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Layer
+          Value: Clean
+        - Key: Project
+          Value: DataLake
+
+  # Analytics Layer S3 Bucket
+  AnalyticsDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectPrefix}-analytics-${Environment}"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: OptimizeForAnalytics
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 60
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 180
+                StorageClass: GLACIER
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Layer
+          Value: Analytics
+        - Key: Project
+          Value: DataLake
+
+  # Athena Query Results Bucket
+  AthenaResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectPrefix}-athena-results-${Environment}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteQueryResults
+            Status: Enabled
+            ExpirationInDays: 30
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: AthenaResults
+        - Key: Project
+          Value: DataLake
+
+  # CloudWatch Log Group for S3 notifications
+  RawDataLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/s3/${ProjectPrefix}-raw-${Environment}"
+      RetentionInDays: 14
+
+  # S3 Bucket Policies
+  RawDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref RawDataBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt RawDataBucket.Arn
+              - !Sub "${RawDataBucket}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+
+  CleanDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CleanDataBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt CleanDataBucket.Arn
+              - !Sub "${CleanDataBucket}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+
+  AnalyticsDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AnalyticsDataBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt AnalyticsDataBucket.Arn
+              - !Sub "${AnalyticsDataBucket}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+
+Outputs:
+  RawDataBucketName:
+    Description: Name of the Raw data S3 bucket
+    Value: !Ref RawDataBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-RawDataBucket"
+
+  RawDataBucketArn:
+    Description: ARN of the Raw data S3 bucket
+    Value: !GetAtt RawDataBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RawDataBucketArn"
+
+  CleanDataBucketName:
+    Description: Name of the Clean data S3 bucket
+    Value: !Ref CleanDataBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-CleanDataBucket"
+
+  CleanDataBucketArn:
+    Description: ARN of the Clean data S3 bucket
+    Value: !GetAtt CleanDataBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CleanDataBucketArn"
+
+  AnalyticsDataBucketName:
+    Description: Name of the Analytics data S3 bucket
+    Value: !Ref AnalyticsDataBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-AnalyticsDataBucket"
+
+  AnalyticsDataBucketArn:
+    Description: ARN of the Analytics data S3 bucket
+    Value: !GetAtt AnalyticsDataBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AnalyticsDataBucketArn"
+
+  AthenaResultsBucketName:
+    Description: Name of the Athena results S3 bucket
+    Value: !Ref AthenaResultsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-AthenaResultsBucket"
+
+  AthenaResultsBucketArn:
+    Description: ARN of the Athena results S3 bucket
+    Value: !GetAtt AthenaResultsBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AthenaResultsBucketArn"

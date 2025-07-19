@@ -1,0 +1,419 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Cost monitoring and alerting setup for AWS Data Lake project'
+
+Parameters:
+  ProjectPrefix:
+    Type: String
+    Default: dl-handson
+    Description: Prefix for all resource names
+    
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment type
+
+  AlertEmail:
+    Type: String
+    Description: Email address for cost alerts
+    AllowedPattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+    ConstraintDescription: Must be a valid email address
+
+  MonthlyBudgetLimit:
+    Type: Number
+    Default: 100
+    MinValue: 10
+    MaxValue: 10000
+    Description: Monthly budget limit in USD
+
+  DailySpendThreshold:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 1000
+    Description: Daily spend threshold for alerts in USD
+
+Resources:
+  # SNS Topic for Cost Alerts
+  CostAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${ProjectPrefix}-cost-alerts-${Environment}"
+      DisplayName: !Sub "Data Lake Cost Alerts - ${Environment}"
+      KmsMasterKeyId: alias/aws/sns
+
+  # SNS Subscription for Email Alerts
+  CostAlertEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref CostAlertTopic
+      Endpoint: !Ref AlertEmail
+
+  # Budget for Monthly Cost Control
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${ProjectPrefix}-monthly-budget-${Environment}"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetLimit
+          Unit: USD
+        CostFilters:
+          TagKey:
+            - Project
+          TagValue:
+            - DataLake
+        TimePeriod:
+          Start: !Sub "${AWS::StackName}-start"
+          End: "2087-06-15_00:00"
+        PlannedBudgetLimits: {}
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+            NotificationState: ALARM
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+            NotificationState: ALARM
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+            - SubscriptionType: SNS
+              Address: !Ref CostAlertTopic
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+            NotificationState: ALARM
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+  # CloudWatch Log Group for Cost Monitoring
+  CostMonitoringLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/cost-monitoring/${ProjectPrefix}-${Environment}"
+      RetentionInDays: 30
+
+  # Lambda Role for Cost Monitoring
+  CostMonitoringLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectPrefix}-CostMonitoringRole-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CostMonitoringPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ce:GetCostAndUsage
+                  - ce:GetUsageReport
+                  - ce:GetDimensionValues
+                  - ce:GetRightsizingRecommendation
+                  - sns:Publish
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref CostAlertTopic
+
+  # Lambda Function for Daily Cost Monitoring
+  DailyCostMonitoringFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectPrefix}-daily-cost-monitor-${Environment}"
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt CostMonitoringLambdaRole.Arn
+      Timeout: 300
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref CostAlertTopic
+          DAILY_THRESHOLD: !Ref DailySpendThreshold
+          PROJECT_PREFIX: !Ref ProjectPrefix
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime, timedelta
+          from decimal import Decimal
+
+          def lambda_handler(event, context):
+              ce_client = boto3.client('ce')
+              sns_client = boto3.client('sns')
+              
+              # Get environment variables
+              sns_topic_arn = os.environ['SNS_TOPIC_ARN']
+              daily_threshold = float(os.environ['DAILY_THRESHOLD'])
+              project_prefix = os.environ['PROJECT_PREFIX']
+              environment = os.environ['ENVIRONMENT']
+              
+              # Calculate date range (yesterday)
+              end_date = datetime.now().date()
+              start_date = end_date - timedelta(days=1)
+              
+              try:
+                  # Get cost and usage data
+                  response = ce_client.get_cost_and_usage(
+                      TimePeriod={
+                          'Start': start_date.strftime('%Y-%m-%d'),
+                          'End': end_date.strftime('%Y-%m-%d')
+                      },
+                      Granularity='DAILY',
+                      Metrics=['BlendedCost'],
+                      GroupBy=[
+                          {
+                              'Type': 'DIMENSION',
+                              'Key': 'SERVICE'
+                          }
+                      ],
+                      Filter={
+                          'Tags': {
+                              'Key': 'Project',
+                              'Values': ['DataLake']
+                          }
+                      }
+                  )
+                  
+                  # Calculate total daily cost
+                  total_cost = 0
+                  service_costs = {}
+                  
+                  for result in response['ResultsByTime']:
+                      for group in result['Groups']:
+                          service = group['Keys'][0]
+                          cost = float(group['Metrics']['BlendedCost']['Amount'])
+                          total_cost += cost
+                          service_costs[service] = cost
+                  
+                  print(f"Total daily cost: ${total_cost:.2f}")
+                  print(f"Daily threshold: ${daily_threshold:.2f}")
+                  
+                  # Check if cost exceeds threshold
+                  if total_cost > daily_threshold:
+                      # Prepare alert message
+                      message = f"""
+  Data Lake Daily Cost Alert - {environment.upper()}
+  
+  Date: {start_date.strftime('%Y-%m-%d')}
+  Total Cost: ${total_cost:.2f}
+  Threshold: ${daily_threshold:.2f}
+  Overage: ${total_cost - daily_threshold:.2f}
+  
+  Service Breakdown:
+  """
+                      
+                      # Add service breakdown
+                      for service, cost in sorted(service_costs.items(), key=lambda x: x[1], reverse=True):
+                          if cost > 0.01:  # Only show services with significant cost
+                              message += f"  - {service}: ${cost:.2f}\n"
+                      
+                      message += f"""
+  Recommendations:
+  - Check EMR clusters and terminate if not needed
+  - Review S3 storage and lifecycle policies
+  - Optimize Glue job configurations
+  - Consider using Spot instances for EMR
+  
+  AWS Console: https://console.aws.amazon.com/billing/home#/
+  """
+                      
+                      # Send SNS alert
+                      sns_client.publish(
+                          TopicArn=sns_topic_arn,
+                          Subject=f"Data Lake Cost Alert: ${total_cost:.2f} exceeds ${daily_threshold:.2f}",
+                          Message=message
+                      )
+                      
+                      print("Alert sent successfully")
+                  else:
+                      print("Cost within threshold - no alert needed")
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'total_cost': total_cost,
+                          'threshold': daily_threshold,
+                          'alert_sent': total_cost > daily_threshold
+                      })
+                  }
+                  
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  
+                  # Send error alert
+                  sns_client.publish(
+                      TopicArn=sns_topic_arn,
+                      Subject="Data Lake Cost Monitoring Error",
+                      Message=f"Error in daily cost monitoring: {str(e)}"
+                  )
+                  
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+  # EventBridge Rule to trigger daily cost monitoring
+  DailyCostMonitoringSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ProjectPrefix}-daily-cost-monitoring-${Environment}"
+      Description: "Trigger daily cost monitoring for data lake project"
+      ScheduleExpression: "cron(0 9 * * ? *)"  # 9 AM UTC daily
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt DailyCostMonitoringFunction.Arn
+          Id: "DailyCostMonitoringTarget"
+
+  # Permission for EventBridge to invoke Lambda
+  DailyCostMonitoringLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DailyCostMonitoringFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DailyCostMonitoringSchedule.Arn
+
+  # CloudWatch Dashboard for Cost Monitoring
+  CostMonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${ProjectPrefix}-cost-monitoring-${Environment}"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Billing", "EstimatedCharges", "Currency", "USD" ]
+                ],
+                "period": 86400,
+                "stat": "Maximum",
+                "region": "us-east-1",
+                "title": "Estimated Daily Charges",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "log",
+              "x": 0,
+              "y": 6,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "query": "SOURCE '${CostMonitoringLogGroup}' | fields @timestamp, @message\n| sort @timestamp desc\n| limit 100",
+                "region": "${AWS::Region}",
+                "title": "Cost Monitoring Logs",
+                "view": "table"
+              }
+            }
+          ]
+        }
+
+  # CloudWatch Alarm for High Daily Costs
+  HighDailyCostAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectPrefix}-high-daily-cost-${Environment}"
+      AlarmDescription: "Alert when daily costs exceed threshold"
+      MetricName: EstimatedCharges
+      Namespace: AWS/Billing
+      Statistic: Maximum
+      Period: 86400
+      EvaluationPeriods: 1
+      Threshold: !Ref DailySpendThreshold
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Currency
+          Value: USD
+      AlarmActions:
+        - !Ref CostAlertTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for EMR Cluster Running Time
+  EMRClusterRunningTimeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectPrefix}-emr-running-time-${Environment}"
+      AlarmDescription: "Alert when EMR cluster runs for more than 4 hours"
+      MetricName: RunningTime
+      Namespace: AWS/EMR
+      Statistic: Maximum
+      Period: 3600
+      EvaluationPeriods: 4
+      Threshold: 14400  # 4 hours in seconds
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref CostAlertTopic
+      TreatMissingData: notBreaching
+
+Outputs:
+  CostAlertTopicArn:
+    Description: ARN of the cost alert SNS topic
+    Value: !Ref CostAlertTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-CostAlertTopicArn"
+
+  MonthlyBudgetName:
+    Description: Name of the monthly budget
+    Value: !Ref MonthlyBudget
+    Export:
+      Name: !Sub "${AWS::StackName}-MonthlyBudgetName"
+
+  CostMonitoringDashboardURL:
+    Description: URL to the CloudWatch cost monitoring dashboard
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectPrefix}-cost-monitoring-${Environment}"
+
+  DailyCostMonitoringFunctionArn:
+    Description: ARN of the daily cost monitoring Lambda function
+    Value: !GetAtt DailyCostMonitoringFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-DailyCostMonitoringFunctionArn"
+
+  BudgetRecommendations:
+    Description: Cost optimization recommendations
+    Value: !Sub |
+      1. Monitor EMR clusters closely - they are the primary cost driver
+      2. Use EMR Spot instances when possible for non-critical workloads
+      3. Implement automatic EMR cluster termination after job completion
+      4. Review S3 storage classes and implement lifecycle policies
+      5. Monitor Glue job DPU usage and optimize configurations
+      6. Set up CloudWatch alarms for resource utilization
+      7. Use AWS Cost Explorer for detailed cost analysis

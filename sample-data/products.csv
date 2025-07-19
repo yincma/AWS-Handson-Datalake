@@ -1,0 +1,21 @@
+product_id,product_name,category,subcategory,brand,price,cost,weight_kg,dimensions_cm,color,size,material,description,stock_quantity,min_stock_level,supplier_id,launch_date
+PROD-001,iPhone 15 Pro,Electronics,Smartphones,Apple,7999.00,5999.00,0.187,146.6x70.6x8.25,Natural Titanium,128GB,Titanium,Latest iPhone with A17 Pro chip,150,20,SUP-001,2023-09-15
+PROD-002,Samsung Galaxy S24,Electronics,Smartphones,Samsung,6999.00,5249.00,0.168,147.0x70.6x7.6,Phantom Black,256GB,Aluminum,Premium Android smartphone,200,25,SUP-002,2024-01-01
+PROD-003,MacBook Air M3,Electronics,Laptops,Apple,8999.00,6749.00,1.24,30.41x21.5x1.13,Space Gray,13-inch,Aluminum,Lightweight laptop with M3 chip,80,10,SUP-001,2024-03-01
+PROD-004,Dell XPS 13,Electronics,Laptops,Dell,7599.00,5699.00,1.19,29.57x19.86x1.47,Platinum Silver,13-inch,Carbon Fiber,Ultra-portable Windows laptop,95,15,SUP-003,2023-10-01
+PROD-005,Nike Air Max 270,Fashion,Shoes,Nike,899.00,449.00,0.65,32x21x12,Black/White,US 9,Synthetic,Comfortable running shoes,300,50,SUP-004,2023-05-01
+PROD-006,Adidas Ultraboost 22,Fashion,Shoes,Adidas,1299.00,649.00,0.72,33x22x13,Core Black,US 10,Primeknit,High-performance running shoes,250,40,SUP-005,2023-08-01
+PROD-007,Levi's 501 Jeans,Fashion,Clothing,Levi's,599.00,299.00,0.58,,,Blue,32x34,Denim,Classic straight leg jeans,180,30,SUP-006,2023-01-01
+PROD-008,Uniqlo Heattech T-shirt,Fashion,Clothing,Uniqlo,129.00,64.00,0.15,,,White,L,Cotton Blend,Thermal base layer shirt,500,100,SUP-007,2023-11-01
+PROD-009,The Great Gatsby,Books,Fiction,Scribner,89.00,44.00,0.18,19.8x12.9x1.5,,,Paperback,Classic American novel,120,20,SUP-008,1925-04-10
+PROD-010,Think Python,Books,Technical,O'Reilly,299.00,149.00,0.68,23.4x17.8x2.8,,,Paperback,Programming guide for Python,75,15,SUP-009,2023-07-01
+PROD-011,Instant Pot Duo 7-in-1,Home,Kitchen,Instant Pot,699.00,349.00,5.44,32.5x31.1x32.5,Stainless Steel,6 Quart,Stainless Steel,Multi-functional pressure cooker,60,10,SUP-010,2023-02-01
+PROD-012,Dyson V15 Detect,Home,Cleaning,Dyson,3999.00,2799.00,2.61,126.1x25.0x26.1,Yellow/Iron,Cordless,Plastic/Metal,Laser dust detection vacuum,35,5,SUP-011,2023-06-01
+PROD-013,IKEA BILLY Bookshelf,Home,Furniture,IKEA,399.00,199.00,23.5,40x28x202,White,80x28x202cm,Particleboard,Classic bookshelf design,45,8,SUP-012,2023-01-01
+PROD-014,Herman Miller Aeron Chair,Home,Furniture,Herman Miller,8999.00,5399.00,20.4,68.6x68.6x94-104,Graphite,Size B,Plastic/Aluminum,Ergonomic office chair,15,3,SUP-013,2023-04-01
+PROD-015,Protein Powder Vanilla,Health,Supplements,Optimum Nutrition,299.00,149.00,2.27,,,,,Whey protein supplement,200,40,SUP-014,2023-03-01
+PROD-016,Vitamin D3 1000 IU,Health,Supplements,Nature Made,89.00,44.00,0.12,,,,,Daily vitamin supplement,150,30,SUP-015,2023-01-01
+PROD-017,PlayStation 5,Electronics,Gaming,Sony,3999.00,2999.00,4.5,39.0x26.0x10.4,White,Standard,Plastic,Next-gen gaming console,25,5,SUP-016,2023-11-01
+PROD-018,Xbox Series X,Electronics,Gaming,Microsoft,3999.00,2999.00,4.45,30.1x15.1x15.1,Black,1TB,Plastic,Microsoft gaming console,30,5,SUP-017,2023-11-01
+PROD-019,Nintendo Switch OLED,Electronics,Gaming,Nintendo,2299.00,1724.00,0.42,24.2x13.9x2.8,White,64GB,Plastic,Hybrid gaming console,40,8,SUP-018,2023-10-01
+PROD-020,AirPods Pro 2nd Gen,Electronics,Audio,Apple,1899.00,1424.00,0.05,3.05x2.18x2.40,White,,Plastic,Noise-cancelling earbuds,180,30,SUP-001,2023-09-01

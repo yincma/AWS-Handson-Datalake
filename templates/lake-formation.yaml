@@ -1,0 +1,316 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS Data Lake Formation setup for data governance and permissions'
+
+Parameters:
+  ProjectPrefix:
+    Type: String
+    Default: dl-handson
+    Description: Prefix for all resource names
+    
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment type
+
+  S3StackName:
+    Type: String
+    Description: Name of the S3 storage layer CloudFormation stack
+    Default: datalake-s3-storage
+
+  IAMStackName:
+    Type: String
+    Description: Name of the IAM roles CloudFormation stack
+    Default: datalake-iam-roles
+
+Resources:
+  # Glue Database for Data Catalog
+  DataLakeDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Sub "${ProjectPrefix}_db"
+        Description: !Sub "Data Lake database for ${ProjectPrefix} project"
+        Parameters:
+          Environment: !Ref Environment
+          Project: DataLake
+          CreatedBy: CloudFormation
+
+  # Lake Formation Data Lake Settings
+  DataLakeSettings:
+    Type: AWS::LakeFormation::DataLakeSettings
+    Properties:
+      Admins:
+        - DataLakePrincipalIdentifier: !Sub 
+          - "${LabAdminRoleArn}"
+          - LabAdminRoleArn: 
+              Fn::ImportValue: !Sub "${IAMStackName}-LabAdminRoleArn"
+        - DataLakePrincipalIdentifier: !Sub 
+          - "${DataEngineerRoleArn}"
+          - DataEngineerRoleArn: 
+              Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+      DefaultDataLakeSettings:
+        CreateDatabaseDefaultPermissions:
+          - Principal: !Sub 
+            - "${DataEngineerRoleArn}"
+            - DataEngineerRoleArn: 
+                Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+            Permissions: ["ALL"]
+        CreateTableDefaultPermissions:
+          - Principal: !Sub 
+            - "${DataEngineerRoleArn}"
+            - DataEngineerRoleArn: 
+                Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+            Permissions: ["ALL"]
+
+  # Register S3 Raw Data Location
+  RawDataLocationResource:
+    Type: AWS::LakeFormation::Resource
+    Properties:
+      ResourceArn: !Sub 
+        - "${RawBucketArn}"
+        - RawBucketArn: 
+            Fn::ImportValue: !Sub "${S3StackName}-RawDataBucketArn"
+      UseServiceLinkedRole: false
+      RoleArn: !Sub 
+        - "${DataEngineerRoleArn}"
+        - DataEngineerRoleArn: 
+            Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+
+  # Register S3 Clean Data Location
+  CleanDataLocationResource:
+    Type: AWS::LakeFormation::Resource
+    Properties:
+      ResourceArn: !Sub 
+        - "${CleanBucketArn}"
+        - CleanBucketArn: 
+            Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
+      UseServiceLinkedRole: false
+      RoleArn: !Sub 
+        - "${DataEngineerRoleArn}"
+        - DataEngineerRoleArn: 
+            Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+
+  # Register S3 Analytics Data Location
+  AnalyticsDataLocationResource:
+    Type: AWS::LakeFormation::Resource
+    Properties:
+      ResourceArn: !Sub 
+        - "${AnalyticsBucketArn}"
+        - AnalyticsBucketArn: 
+            Fn::ImportValue: !Sub "${S3StackName}-AnalyticsDataBucketArn"
+      UseServiceLinkedRole: false
+      RoleArn: !Sub 
+        - "${DataEngineerRoleArn}"
+        - DataEngineerRoleArn: 
+            Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+
+  # Grant Data Engineer full permissions on database
+  DataEngineerDatabasePermissions:
+    Type: AWS::LakeFormation::Permissions
+    Properties:
+      DataLakePrincipal:
+        DataLakePrincipalIdentifier: !Sub 
+          - "${DataEngineerRoleArn}"
+          - DataEngineerRoleArn: 
+              Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+      Resource:
+        DatabaseResource:
+          CatalogId: !Ref AWS::AccountId
+          Name: !Ref DataLakeDatabase
+      Permissions:
+        - ALL
+      PermissionsWithGrantOption:
+        - ALL
+
+  # Grant Data Engineer permissions on Raw Data Location
+  DataEngineerRawLocationPermissions:
+    Type: AWS::LakeFormation::Permissions
+    Properties:
+      DataLakePrincipal:
+        DataLakePrincipalIdentifier: !Sub 
+          - "${DataEngineerRoleArn}"
+          - DataEngineerRoleArn: 
+              Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+      Resource:
+        DataLocationResource:
+          CatalogId: !Ref AWS::AccountId
+          ResourceArn: !Sub 
+            - "${RawBucketArn}"
+            - RawBucketArn: 
+                Fn::ImportValue: !Sub "${S3StackName}-RawDataBucketArn"
+      Permissions:
+        - DATA_LOCATION_ACCESS
+
+  # Grant Data Engineer permissions on Clean Data Location
+  DataEngineerCleanLocationPermissions:
+    Type: AWS::LakeFormation::Permissions
+    Properties:
+      DataLakePrincipal:
+        DataLakePrincipalIdentifier: !Sub 
+          - "${DataEngineerRoleArn}"
+          - DataEngineerRoleArn: 
+              Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+      Resource:
+        DataLocationResource:
+          CatalogId: !Ref AWS::AccountId
+          ResourceArn: !Sub 
+            - "${CleanBucketArn}"
+            - CleanBucketArn: 
+                Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
+      Permissions:
+        - DATA_LOCATION_ACCESS
+
+  # Grant Data Engineer permissions on Analytics Data Location
+  DataEngineerAnalyticsLocationPermissions:
+    Type: AWS::LakeFormation::Permissions
+    Properties:
+      DataLakePrincipal:
+        DataLakePrincipalIdentifier: !Sub 
+          - "${DataEngineerRoleArn}"
+          - DataEngineerRoleArn: 
+              Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+      Resource:
+        DataLocationResource:
+          CatalogId: !Ref AWS::AccountId
+          ResourceArn: !Sub 
+            - "${AnalyticsBucketArn}"
+            - AnalyticsBucketArn: 
+                Fn::ImportValue: !Sub "${S3StackName}-AnalyticsDataBucketArn"
+      Permissions:
+        - DATA_LOCATION_ACCESS
+
+  # Grant Analyst role permissions on database (read-only)
+  AnalystDatabasePermissions:
+    Type: AWS::LakeFormation::Permissions
+    Properties:
+      DataLakePrincipal:
+        DataLakePrincipalIdentifier: !Sub 
+          - "${AnalystRoleArn}"
+          - AnalystRoleArn: 
+              Fn::ImportValue: !Sub "${IAMStackName}-AnalystRoleArn"
+      Resource:
+        DatabaseResource:
+          CatalogId: !Ref AWS::AccountId
+          Name: !Ref DataLakeDatabase
+      Permissions:
+        - DESCRIBE
+
+  # Grant Glue Crawler permissions
+  GlueCrawlerDatabasePermissions:
+    Type: AWS::LakeFormation::Permissions
+    Properties:
+      DataLakePrincipal:
+        DataLakePrincipalIdentifier: !Sub 
+          - "${GlueCrawlerRoleArn}"
+          - GlueCrawlerRoleArn: 
+              Fn::ImportValue: !Sub "${IAMStackName}-GlueCrawlerRoleArn"
+      Resource:
+        DatabaseResource:
+          CatalogId: !Ref AWS::AccountId
+          Name: !Ref DataLakeDatabase
+      Permissions:
+        - CREATE_TABLE
+        - ALTER
+        - DESCRIBE
+
+  # Grant Glue Crawler permissions on Raw Data Location
+  GlueCrawlerRawLocationPermissions:
+    Type: AWS::LakeFormation::Permissions
+    Properties:
+      DataLakePrincipal:
+        DataLakePrincipalIdentifier: !Sub 
+          - "${GlueCrawlerRoleArn}"
+          - GlueCrawlerRoleArn: 
+              Fn::ImportValue: !Sub "${IAMStackName}-GlueCrawlerRoleArn"
+      Resource:
+        DataLocationResource:
+          CatalogId: !Ref AWS::AccountId
+          ResourceArn: !Sub 
+            - "${RawBucketArn}"
+            - RawBucketArn: 
+                Fn::ImportValue: !Sub "${S3StackName}-RawDataBucketArn"
+      Permissions:
+        - DATA_LOCATION_ACCESS
+
+  # Glue Crawler for Raw Data
+  RawDataCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Sub "${ProjectPrefix}-raw-crawler"
+      Role: !Sub 
+        - "${GlueCrawlerRoleArn}"
+        - GlueCrawlerRoleArn: 
+            Fn::ImportValue: !Sub "${IAMStackName}-GlueCrawlerRoleArn"
+      DatabaseName: !Ref DataLakeDatabase
+      Description: "Crawler for raw data layer"
+      Schedule:
+        ScheduleExpression: "cron(0 1 * * ? *)"  # Daily at 1 AM UTC
+      Targets:
+        S3Targets:
+          - Path: !Sub 
+            - "s3://${RawBucketName}/"
+            - RawBucketName: 
+                Fn::ImportValue: !Sub "${S3StackName}-RawDataBucket"
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: LOG
+      RecrawlPolicy:
+        RecrawlBehavior: CRAWL_EVERYTHING
+      Configuration: |
+        {
+          "Version": 1.0,
+          "CrawlerOutput": {
+            "Partitions": { "AddOrUpdateBehavior": "InheritFromTable" },
+            "Tables": { "AddOrUpdateBehavior": "MergeNewColumns" }
+          }
+        }
+
+  # Glue Crawler for Clean Data
+  CleanDataCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Sub "${ProjectPrefix}-clean-crawler"
+      Role: !Sub 
+        - "${GlueCrawlerRoleArn}"
+        - GlueCrawlerRoleArn: 
+            Fn::ImportValue: !Sub "${IAMStackName}-GlueCrawlerRoleArn"
+      DatabaseName: !Ref DataLakeDatabase
+      Description: "Crawler for clean data layer"
+      Schedule:
+        ScheduleExpression: "cron(0 2 * * ? *)"  # Daily at 2 AM UTC
+      Targets:
+        S3Targets:
+          - Path: !Sub 
+            - "s3://${CleanBucketName}/"
+            - CleanBucketName: 
+                Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucket"
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: LOG
+
+Outputs:
+  DatabaseName:
+    Description: Name of the Glue database
+    Value: !Ref DataLakeDatabase
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseName"
+
+  RawDataCrawlerName:
+    Description: Name of the raw data crawler
+    Value: !Ref RawDataCrawler
+    Export:
+      Name: !Sub "${AWS::StackName}-RawDataCrawlerName"
+
+  CleanDataCrawlerName:
+    Description: Name of the clean data crawler
+    Value: !Ref CleanDataCrawler
+    Export:
+      Name: !Sub "${AWS::StackName}-CleanDataCrawlerName"
+
+  DataLakeSettingsStatus:
+    Description: Lake Formation data lake settings configuration status
+    Value: "Configured"
+    Export:
+      Name: !Sub "${AWS::StackName}-DataLakeSettingsStatus"

@@ -1,0 +1,443 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS Data Lake IAM Roles and Policies for different personas and services'
+
+Parameters:
+  ProjectPrefix:
+    Type: String
+    Default: dl-handson
+    Description: Prefix for all resource names
+    
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment type
+
+  S3StackName:
+    Type: String
+    Description: Name of the S3 storage layer CloudFormation stack
+    Default: datalake-s3-storage
+
+Resources:
+  # Lab Admin Role - Full administrative access
+  LabAdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectPrefix}-LabAdminRole-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Role
+          Value: Admin
+        - Key: Project
+          Value: DataLake
+
+  # Data Engineer Role - Comprehensive data lake permissions
+  DataEngineerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectPrefix}-DataEngineerRole-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [glue.amazonaws.com, emr.amazonaws.com, databrew.amazonaws.com]
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DataEngineerS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource:
+                  - !Sub 
+                    - "${RawBucketArn}"
+                    - RawBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-RawDataBucketArn"
+                  - !Sub 
+                    - "${RawBucketArn}/*"
+                    - RawBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-RawDataBucketArn"
+                  - !Sub 
+                    - "${CleanBucketArn}"
+                    - CleanBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
+                  - !Sub 
+                    - "${CleanBucketArn}/*"
+                    - CleanBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
+                  - !Sub 
+                    - "${AnalyticsBucketArn}"
+                    - AnalyticsBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-AnalyticsDataBucketArn"
+                  - !Sub 
+                    - "${AnalyticsBucketArn}/*"
+                    - AnalyticsBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-AnalyticsDataBucketArn"
+        - PolicyName: DataEngineerGluePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - glue:*
+                  - lakeformation:GetDataAccess
+                  - lakeformation:GrantPermissions
+                  - lakeformation:RevokePermissions
+                  - lakeformation:BatchGrantPermissions
+                  - lakeformation:BatchRevokePermissions
+                Resource: "*"
+        - PolicyName: DataEngineerLakeFormationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lakeformation:*
+                Resource: "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+        - arn:aws:iam::aws:policy/AmazonEMRFullAccessPolicy_v2
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Role
+          Value: DataEngineer
+        - Key: Project
+          Value: DataLake
+
+  # Analyst Role - Read-only access to clean and analytics data
+  AnalystRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectPrefix}-AnalystRole-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [athena.amazonaws.com, quicksight.amazonaws.com]
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AnalystS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource:
+                  - !Sub 
+                    - "${CleanBucketArn}"
+                    - CleanBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
+                  - !Sub 
+                    - "${CleanBucketArn}/*"
+                    - CleanBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
+                  - !Sub 
+                    - "${AnalyticsBucketArn}"
+                    - AnalyticsBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-AnalyticsDataBucketArn"
+                  - !Sub 
+                    - "${AnalyticsBucketArn}/*"
+                    - AnalyticsBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-AnalyticsDataBucketArn"
+                  - !Sub 
+                    - "${AthenaBucketArn}"
+                    - AthenaBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-AthenaResultsBucketArn"
+                  - !Sub 
+                    - "${AthenaBucketArn}/*"
+                    - AthenaBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-AthenaResultsBucketArn"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub 
+                    - "${AthenaBucketArn}/*"
+                    - AthenaBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-AthenaResultsBucketArn"
+        - PolicyName: AnalystAthenaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - athena:*
+                  - glue:GetDatabase
+                  - glue:GetDatabases
+                  - glue:GetTable
+                  - glue:GetTables
+                  - glue:GetPartition
+                  - glue:GetPartitions
+                  - lakeformation:GetDataAccess
+                Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Role
+          Value: Analyst
+        - Key: Project
+          Value: DataLake
+
+  # Glue Crawler Role
+  GlueCrawlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectPrefix}-GlueCrawlerRole-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GlueCrawlerS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource:
+                  - !Sub 
+                    - "${RawBucketArn}"
+                    - RawBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-RawDataBucketArn"
+                  - !Sub 
+                    - "${RawBucketArn}/*"
+                    - RawBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-RawDataBucketArn"
+                  - !Sub 
+                    - "${CleanBucketArn}"
+                    - CleanBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
+                  - !Sub 
+                    - "${CleanBucketArn}/*"
+                    - CleanBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Role
+          Value: GlueCrawler
+        - Key: Project
+          Value: DataLake
+
+  # EMR Service Role
+  EMRServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectPrefix}-EMRServiceRole-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: elasticmapreduce.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEMRServicePolicy_v2
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Role
+          Value: EMRService
+        - Key: Project
+          Value: DataLake
+
+  # EMR EC2 Instance Profile Role
+  EMRInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectPrefix}-EMRInstanceRole-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EMRInstanceS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource:
+                  - !Sub 
+                    - "${CleanBucketArn}"
+                    - CleanBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
+                  - !Sub 
+                    - "${CleanBucketArn}/*"
+                    - CleanBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
+                  - !Sub 
+                    - "${AnalyticsBucketArn}"
+                    - AnalyticsBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-AnalyticsDataBucketArn"
+                  - !Sub 
+                    - "${AnalyticsBucketArn}/*"
+                    - AnalyticsBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-AnalyticsDataBucketArn"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEMRforEC2Role
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Role
+          Value: EMRInstance
+        - Key: Project
+          Value: DataLake
+
+  # EMR Instance Profile
+  EMRInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "${ProjectPrefix}-EMRInstanceProfile-${Environment}"
+      Roles:
+        - !Ref EMRInstanceRole
+
+  # Glue DataBrew Service Role
+  GlueDataBrewRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectPrefix}-GlueDataBrewRole-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: databrew.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GlueDataBrewS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource:
+                  - !Sub 
+                    - "${RawBucketArn}"
+                    - RawBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-RawDataBucketArn"
+                  - !Sub 
+                    - "${RawBucketArn}/*"
+                    - RawBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-RawDataBucketArn"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub 
+                    - "${CleanBucketArn}/*"
+                    - CleanBucketArn: 
+                        Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueDataBrewServiceRole
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Role
+          Value: GlueDataBrew
+        - Key: Project
+          Value: DataLake
+
+Outputs:
+  LabAdminRoleArn:
+    Description: ARN of the Lab Admin Role
+    Value: !GetAtt LabAdminRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LabAdminRoleArn"
+
+  DataEngineerRoleArn:
+    Description: ARN of the Data Engineer Role
+    Value: !GetAtt DataEngineerRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-DataEngineerRoleArn"
+
+  AnalystRoleArn:
+    Description: ARN of the Analyst Role
+    Value: !GetAtt AnalystRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AnalystRoleArn"
+
+  GlueCrawlerRoleArn:
+    Description: ARN of the Glue Crawler Role
+    Value: !GetAtt GlueCrawlerRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-GlueCrawlerRoleArn"
+
+  EMRServiceRoleArn:
+    Description: ARN of the EMR Service Role
+    Value: !GetAtt EMRServiceRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EMRServiceRoleArn"
+
+  EMRInstanceRoleArn:
+    Description: ARN of the EMR Instance Role
+    Value: !GetAtt EMRInstanceRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EMRInstanceRoleArn"
+
+  EMRInstanceProfileArn:
+    Description: ARN of the EMR Instance Profile
+    Value: !GetAtt EMRInstanceProfile.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EMRInstanceProfileArn"
+
+  GlueDataBrewRoleArn:
+    Description: ARN of the Glue DataBrew Role
+    Value: !GetAtt GlueDataBrewRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-GlueDataBrewRoleArn"
