@@ -1,6 +1,0 @@
-{"order_id": "ORD001", "customer": "田中商事", "product": "商品1", "quantity": 5, "price": 1000, "date": "2025-01-15"}
-{"order_id": "ORD002", "customer": "佐藤株式会社", "product": "商品2", "quantity": 3, "price": 1500, "date": "2025-01-16"}
-{"order_id": "ORD003", "customer": "鈴木グループ", "product": "商品1", "quantity": 10, "price": 1000, "date": "2025-01-17"}
-{"order_id": "ORD004", "customer": "田中商事", "product": "商品3", "quantity": 2, "price": 2000, "date": "2025-01-18"}
-{"order_id": "ORD005", "customer": "高橋コーポレーション", "product": "商品2", "quantity": 7, "price": 1500, "date": "2025-01-19"}
-EOF < /dev/null

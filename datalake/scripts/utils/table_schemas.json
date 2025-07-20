@@ -1,0 +1,52 @@
+{
+  "tables": [
+    {
+      "name": "customers",
+      "columns": [
+        {"Name": "customer_id", "Type": "bigint"},
+        {"Name": "first_name", "Type": "string"},
+        {"Name": "last_name", "Type": "string"},
+        {"Name": "email", "Type": "string"},
+        {"Name": "registration_date", "Type": "string"},
+        {"Name": "city", "Type": "string"},
+        {"Name": "state", "Type": "string"},
+        {"Name": "country", "Type": "string"}
+      ]
+    },
+    {
+      "name": "products",
+      "columns": [
+        {"Name": "product_id", "Type": "bigint"},
+        {"Name": "product_name", "Type": "string"},
+        {"Name": "category", "Type": "string"},
+        {"Name": "subcategory", "Type": "string"},
+        {"Name": "brand", "Type": "string"},
+        {"Name": "price", "Type": "double"},
+        {"Name": "description", "Type": "string"}
+      ]
+    },
+    {
+      "name": "orders",
+      "columns": [
+        {"Name": "order_id", "Type": "bigint"},
+        {"Name": "customer_id", "Type": "bigint"},
+        {"Name": "order_date", "Type": "string"},
+        {"Name": "order_status", "Type": "string"},
+        {"Name": "total_amount", "Type": "double"},
+        {"Name": "payment_method", "Type": "string"},
+        {"Name": "shipping_address", "Type": "string"}
+      ]
+    },
+    {
+      "name": "order_items",
+      "columns": [
+        {"Name": "order_item_id", "Type": "bigint"},
+        {"Name": "order_id", "Type": "bigint"},
+        {"Name": "product_id", "Type": "bigint"},
+        {"Name": "quantity", "Type": "int"},
+        {"Name": "unit_price", "Type": "double"},
+        {"Name": "discount", "Type": "double"}
+      ]
+    }
+  ]
+}

@@ -1,551 +1,560 @@
 #!/bin/bash
 
 # AWS Data Lake Cleanup Script
-# This script removes all resources created for the data lake project
-# WARNING: This will delete all data and resources. Use with caution!
+# This script removes all resources created by the setup script
 
-set -e
+# DO NOT use set -e to allow complete cleanup even with errors
 
-# Color codes for output
+# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
+YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to print colored output
-print_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+print_step() { echo -e "\n${BLUE}[STEP]${NC} $1"; }
+print_success() { echo -e "${GREEN}✅${NC} $1"; }
+
+# Default values
+FORCE=false
+DELETE_LOGS=false
+RETRY_FAILED=false
+DEEP_CLEAN=false
+
+# Cleanup report arrays
+declare -a SUCCESSFUL_DELETIONS=()
+declare -a FAILED_DELETIONS=()
+
+# Function to show usage
+show_usage() {
+    cat << EOF
+AWS Data Lake Cleanup Script
+
+Usage: $0 [OPTIONS]
+
+Options:
+    --force          Skip confirmation prompts
+    --delete-logs    Also delete CloudWatch logs
+    --retry-failed   Retry failed CloudFormation stack deletions
+    --deep-clean     Deep clean including all S3 versions and delete markers
+    --help, -h       Show this help message
+
+This script will remove:
+    • S3 buckets and all data (including versioned objects)
+    • CloudFormation stacks
+    • Glue resources (database and tables)
+    • EMR clusters (if running)
+    • EC2 key pairs (project-created)
+    • Lake Formation resources
+
+EOF
 }
 
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --force)
+            FORCE=true
+            shift
+            ;;
+        --delete-logs)
+            DELETE_LOGS=true
+            shift
+            ;;
+        --retry-failed)
+            RETRY_FAILED=true
+            shift
+            ;;
+        --deep-clean)
+            DEEP_CLEAN=true
+            shift
+            ;;
+        --help|-h)
+            show_usage
+            exit 0
+            ;;
+        *)
+            print_error "Unknown argument: $1"
+            show_usage
+            exit 1
+            ;;
+    esac
+done
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-print_step() {
-    echo -e "\n${BLUE}[STEP]${NC} $1"
-}
-
-# Function to check if AWS CLI is configured
-check_aws_cli() {
-    if ! command -v aws &> /dev/null; then
-        print_error "AWS CLI is not installed. Please install it first."
-        exit 1
-    fi
-    
-    if ! aws sts get-caller-identity &> /dev/null; then
-        print_error "AWS CLI is not configured or credentials are invalid."
-        exit 1
-    fi
-}
-
-# Function to load configuration
-load_config() {
-    local config_file=""
-    
-    if [[ -f "configs/config.local.env" ]]; then
-        config_file="configs/config.local.env"
-        print_info "Using local configuration: configs/config.local.env"
+# Load configuration
+load_configuration() {
+    if [[ -f "configs/env-vars.sh" ]]; then
+        source configs/env-vars.sh
     elif [[ -f "configs/config.env" ]]; then
-        config_file="configs/config.env"
-        print_info "Using default configuration: configs/config.env"
+        source configs/config.env
     else
-        print_error "No configuration file found. Please run setup-env.sh first."
+        print_error "Configuration file not found!"
         exit 1
     fi
     
-    # Load configuration
-    set -a
-    source "$config_file"
-    set +a
-    
-    # Set defaults if not configured
+    # Set defaults
     PROJECT_PREFIX=${PROJECT_PREFIX:-dl-handson}
     AWS_REGION=${AWS_REGION:-us-east-1}
     ENVIRONMENT=${ENVIRONMENT:-dev}
     
-    print_info "Project: $PROJECT_PREFIX"
-    print_info "Region: $AWS_REGION"
-    print_info "Environment: $ENVIRONMENT"
+    print_info "Configuration loaded:"
+    print_info "  Project: $PROJECT_PREFIX"
+    print_info "  Region: $AWS_REGION"
+    print_info "  Environment: $ENVIRONMENT"
 }
 
-# Function to confirm deletion
+# Track successful and failed operations
+track_deletion() {
+    local resource="$1"
+    local status="$2"
+    
+    if [[ "$status" == "success" ]]; then
+        SUCCESSFUL_DELETIONS+=("$resource")
+    else
+        FAILED_DELETIONS+=("$resource")
+    fi
+}
+
+# Confirm deletion
 confirm_deletion() {
-    echo -e "\n${RED}WARNING: This will delete ALL resources for the data lake project!${NC}"
-    echo "The following resources will be removed:"
-    echo "  - All S3 buckets and their contents"
-    echo "  - EMR clusters"
-    echo "  - Glue crawlers, databases, and tables"
-    echo "  - Glue DataBrew projects and jobs"
-    echo "  - Lake Formation permissions and databases"
-    echo "  - IAM roles and policies"
-    echo "  - CloudFormation stacks"
-    echo ""
-    
-    read -p "Are you sure you want to continue? Type 'DELETE' to confirm: " confirmation
-    
-    if [[ "$confirmation" != "DELETE" ]]; then
-        print_info "Cleanup cancelled."
-        exit 0
-    fi
-}
-
-# Function to terminate EMR clusters
-cleanup_emr_clusters() {
-    print_step "Terminating EMR clusters..."
-    
-    local cluster_name="${PROJECT_PREFIX}-emr-cluster"
-    local clusters=$(aws emr list-clusters --region "$AWS_REGION" --active \
-        --query "Clusters[?Name=='$cluster_name'].Id" --output text 2>/dev/null || true)
-    
-    if [[ -n "$clusters" ]]; then
-        for cluster_id in $clusters; do
-            print_info "Terminating EMR cluster: $cluster_id"
-            aws emr terminate-clusters --cluster-ids "$cluster_id" --region "$AWS_REGION"
-        done
+    if [[ "$FORCE" == "false" ]]; then
+        echo -e "${YELLOW}⚠️  WARNING: This will delete all data lake resources!${NC}"
+        echo "Resources to be deleted:"
+        echo "  • All S3 buckets starting with ${PROJECT_PREFIX}"
+        echo "  • All CloudFormation stacks"
+        echo "  • All Glue databases and tables"
+        echo "  • All EC2 key pairs matching ${PROJECT_PREFIX}-emr-key*"
+        echo "  • All Lake Formation resources"
+        echo ""
+        read -p "Are you sure you want to continue? (yes/no): " confirmation
         
-        print_info "Waiting for EMR clusters to terminate..."
-        for cluster_id in $clusters; do
-            aws emr wait cluster-terminated --cluster-id "$cluster_id" --region "$AWS_REGION"
-        done
-    else
-        print_info "No active EMR clusters found."
-    fi
-}
-
-# Function to cleanup Glue DataBrew
-cleanup_databrew() {
-    print_step "Cleaning up Glue DataBrew resources..."
-    
-    # List and delete jobs
-    local jobs=$(aws databrew list-jobs --region "$AWS_REGION" \
-        --query "Jobs[?starts_with(Name, '$PROJECT_PREFIX')].Name" --output text 2>/dev/null || true)
-    
-    if [[ -n "$jobs" ]]; then
-        for job in $jobs; do
-            print_info "Deleting DataBrew job: $job"
-            aws databrew delete-job --name "$job" --region "$AWS_REGION" || true
-        done
-    fi
-    
-    # List and delete projects
-    local projects=$(aws databrew list-projects --region "$AWS_REGION" \
-        --query "Projects[?starts_with(Name, '$PROJECT_PREFIX')].Name" --output text 2>/dev/null || true)
-    
-    if [[ -n "$projects" ]]; then
-        for project in $projects; do
-            print_info "Deleting DataBrew project: $project"
-            aws databrew delete-project --name "$project" --region "$AWS_REGION" || true
-        done
-    fi
-    
-    # List and delete datasets
-    local datasets=$(aws databrew list-datasets --region "$AWS_REGION" \
-        --query "Datasets[?starts_with(Name, '$PROJECT_PREFIX')].Name" --output text 2>/dev/null || true)
-    
-    if [[ -n "$datasets" ]]; then
-        for dataset in $datasets; do
-            print_info "Deleting DataBrew dataset: $dataset"
-            aws databrew delete-dataset --name "$dataset" --region "$AWS_REGION" || true
-        done
-    fi
-}
-
-# Function to cleanup Glue resources
-cleanup_glue() {
-    print_step "Cleaning up Glue resources..."
-    
-    local database_name="${PROJECT_PREFIX}_db"
-    
-    # Stop and delete crawlers
-    local crawlers=$(aws glue get-crawlers --region "$AWS_REGION" \
-        --query "CrawlerList[?starts_with(Name, '$PROJECT_PREFIX')].Name" --output text 2>/dev/null || true)
-    
-    if [[ -n "$crawlers" ]]; then
-        for crawler in $crawlers; do
-            print_info "Stopping crawler: $crawler"
-            aws glue stop-crawler --name "$crawler" --region "$AWS_REGION" 2>/dev/null || true
-            
-            print_info "Deleting crawler: $crawler"
-            aws glue delete-crawler --name "$crawler" --region "$AWS_REGION" || true
-        done
-    fi
-    
-    # Delete tables from database
-    local tables=$(aws glue get-tables --database-name "$database_name" --region "$AWS_REGION" \
-        --query "TableList[].Name" --output text 2>/dev/null || true)
-    
-    if [[ -n "$tables" ]]; then
-        for table in $tables; do
-            print_info "Deleting table: $table"
-            aws glue delete-table --database-name "$database_name" --name "$table" --region "$AWS_REGION" || true
-        done
-    fi
-    
-    # Delete database
-    print_info "Deleting Glue database: $database_name"
-    aws glue delete-database --name "$database_name" --region "$AWS_REGION" 2>/dev/null || true
-}
-
-# Function to cleanup Lake Formation
-cleanup_lake_formation() {
-    print_step "Cleaning up Lake Formation resources..."
-    
-    local database_name="${PROJECT_PREFIX}_db"
-    
-    # Revoke all permissions
-    print_info "Revoking Lake Formation permissions..."
-    aws lakeformation batch-revoke-permissions --region "$AWS_REGION" \
-        --entries '[
-            {
-                "Id": "1",
-                "Principal": {"DataLakePrincipalIdentifier": "*"},
-                "Resource": {"Database": {"Name": "'$database_name'"}},
-                "Permissions": ["ALL"]
-            }
-        ]' 2>/dev/null || true
-    
-    # Deregister S3 locations
-    local raw_bucket="${PROJECT_PREFIX}-raw-${ENVIRONMENT}"
-    local clean_bucket="${PROJECT_PREFIX}-clean-${ENVIRONMENT}"
-    local analytics_bucket="${PROJECT_PREFIX}-analytics-${ENVIRONMENT}"
-    
-    for bucket in "$raw_bucket" "$clean_bucket" "$analytics_bucket"; do
-        print_info "Deregistering S3 location: s3://$bucket"
-        aws lakeformation deregister-resource --resource-arn "arn:aws:s3:::$bucket" --region "$AWS_REGION" 2>/dev/null || true
-    done
-}
-
-# Function to empty and delete S3 buckets
-cleanup_s3_buckets() {
-    print_step "Cleaning up S3 buckets..."
-    
-    # Auto-discover all buckets related to this project
-    print_info "Discovering all S3 buckets for project: $PROJECT_PREFIX"
-    local discovered_buckets=$(aws s3api list-buckets \
-        --query "Buckets[?contains(Name, '$PROJECT_PREFIX')].Name" --output text 2>/dev/null || true)
-    
-    local buckets=()
-    if [[ -n "$discovered_buckets" && "$discovered_buckets" != "None" ]]; then
-        # Add discovered buckets
-        for bucket in $discovered_buckets; do
-            buckets+=("$bucket")
-        done
-        print_info "Found ${#buckets[@]} S3 buckets to delete"
-    else
-        # Fallback to predefined bucket names (only check if they exist)
-        print_info "No buckets discovered automatically, checking predefined bucket names"
-        local predefined_buckets=(
-            "${PROJECT_PREFIX}-raw-${ENVIRONMENT}"
-            "${PROJECT_PREFIX}-clean-${ENVIRONMENT}"
-            "${PROJECT_PREFIX}-analytics-${ENVIRONMENT}"
-            "${PROJECT_PREFIX}-athena-results-${ENVIRONMENT}"
-            "${PROJECT_PREFIX}-logs-${ENVIRONMENT}"
-        )
-        
-        for bucket in "${predefined_buckets[@]}"; do
-            if aws s3api head-bucket --bucket "$bucket" 2>/dev/null; then
-                buckets+=("$bucket")
-            fi
-        done
-        
-        if [[ ${#buckets[@]} -eq 0 ]]; then
-            print_info "No S3 buckets found to delete"
-            return
-        else
-            print_info "Found ${#buckets[@]} predefined S3 buckets to delete"
+        if [[ "$confirmation" != "yes" ]]; then
+            print_info "Cleanup cancelled"
+            exit 0
         fi
     fi
+}
+
+# Delete S3 bucket with retry logic
+delete_s3_bucket() {
+    local bucket="$1"
+    local max_retries=3
+    local retry_count=0
     
-    for bucket in "${buckets[@]}"; do
-        if aws s3api head-bucket --bucket "$bucket" --region "$AWS_REGION" 2>/dev/null; then
-            print_info "Processing S3 bucket: $bucket"
+    while [[ $retry_count -lt $max_retries ]]; do
+        if aws s3api head-bucket --bucket "$bucket" 2>/dev/null; then
+            print_info "Processing bucket: $bucket"
             
-            # First, remove all current objects
-            print_info "Removing current objects from $bucket"
-            aws s3 rm "s3://$bucket" --recursive --region "$AWS_REGION" 2>/dev/null || true
-            
-            # Check if versioning is enabled
-            local versioning_status=$(aws s3api get-bucket-versioning --bucket "$bucket" --region "$AWS_REGION" \
-                --query 'Status' --output text 2>/dev/null || echo "None")
-            
-            if [[ "$versioning_status" == "Enabled" ]]; then
-                print_info "Bucket $bucket has versioning enabled, cleaning up all versions..."
+            # If deep clean, remove all versions and delete markers
+            if [[ "$DEEP_CLEAN" == "true" ]]; then
+                print_info "Deep cleaning bucket (removing all versions)..."
                 
-                # Delete all object versions in batches
-                local max_retries=3
-                local retry_count=0
-                
-                while [[ $retry_count -lt $max_retries ]]; do
-                    # Get object versions
-                    local versions=$(aws s3api list-object-versions --bucket "$bucket" --region "$AWS_REGION" \
-                        --query 'Versions[].{Key:Key,VersionId:VersionId}' --output json 2>/dev/null || echo "[]")
-                    
-                    local delete_markers=$(aws s3api list-object-versions --bucket "$bucket" --region "$AWS_REGION" \
-                        --query 'DeleteMarkers[].{Key:Key,VersionId:VersionId}' --output json 2>/dev/null || echo "[]")
-                    
-                    # Count total objects to delete
-                    local version_count=$(echo "$versions" | jq '. | length' 2>/dev/null || echo "0")
-                    local marker_count=$(echo "$delete_markers" | jq '. | length' 2>/dev/null || echo "0")
-                    local total_count=$((version_count + marker_count))
-                    
-                    if [[ $total_count -eq 0 ]]; then
-                        print_info "All versions cleaned from bucket $bucket"
-                        break
-                    fi
-                    
-                    print_info "Deleting $version_count versions and $marker_count delete markers from $bucket (attempt $((retry_count + 1)))"
-                    
-                    # Delete object versions in batches
-                    if [[ $version_count -gt 0 ]]; then
-                        echo "$versions" | jq -r '.[] | "\(.Key) \(.VersionId)"' | while read -r key version_id; do
-                            if [[ -n "$key" && -n "$version_id" ]]; then
-                                aws s3api delete-object --bucket "$bucket" --key "$key" --version-id "$version_id" --region "$AWS_REGION" 2>/dev/null || true
-                            fi
-                        done
-                    fi
-                    
-                    # Delete delete markers in batches
-                    if [[ $marker_count -gt 0 ]]; then
-                        echo "$delete_markers" | jq -r '.[] | "\(.Key) \(.VersionId)"' | while read -r key version_id; do
-                            if [[ -n "$key" && -n "$version_id" ]]; then
-                                aws s3api delete-object --bucket "$bucket" --key "$key" --version-id "$version_id" --region "$AWS_REGION" 2>/dev/null || true
-                            fi
-                        done
-                    fi
-                    
-                    retry_count=$((retry_count + 1))
-                    sleep 5  # Wait a bit before next attempt
+                # List and delete all object versions
+                aws s3api list-object-versions --bucket "$bucket" --output json | \
+                jq -r '.Versions[]? | "--key \"\(.Key)\" --version-id \(.VersionId)"' | \
+                while read -r line; do
+                    eval "aws s3api delete-object --bucket \"$bucket\" $line" 2>/dev/null || true
                 done
                 
-                if [[ $retry_count -eq $max_retries ]]; then
-                    print_warning "Could not clean all versions from $bucket after $max_retries attempts"
-                fi
+                # List and delete all delete markers
+                aws s3api list-object-versions --bucket "$bucket" --output json | \
+                jq -r '.DeleteMarkers[]? | "--key \"\(.Key)\" --version-id \(.VersionId)"' | \
+                while read -r line; do
+                    eval "aws s3api delete-object --bucket \"$bucket\" $line" 2>/dev/null || true
+                done
+            else
+                # Standard deletion
+                print_info "Emptying bucket..."
+                aws s3 rm "s3://${bucket}" --recursive 2>/dev/null || true
             fi
             
-            # Try to delete the bucket
-            print_info "Attempting to delete S3 bucket: $bucket"
-            local delete_attempts=0
-            local max_delete_attempts=5
-            
-            while [[ $delete_attempts -lt $max_delete_attempts ]]; do
-                if aws s3api delete-bucket --bucket "$bucket" --region "$AWS_REGION" 2>/dev/null; then
-                    print_info "Successfully deleted bucket: $bucket"
-                    break
-                else
-                    delete_attempts=$((delete_attempts + 1))
-                    if [[ $delete_attempts -lt $max_delete_attempts ]]; then
-                        print_warning "Failed to delete bucket $bucket, retrying in 10 seconds... (attempt $delete_attempts)"
-                        sleep 10
-                        
-                        # Try to empty again before retry
-                        aws s3 rm "s3://$bucket" --recursive --region "$AWS_REGION" 2>/dev/null || true
-                    else
-                        print_error "Failed to delete bucket $bucket after $max_delete_attempts attempts"
-                        print_warning "Please manually delete this bucket in the AWS Console"
-                    fi
-                fi
-            done
+            # Delete the bucket
+            print_info "Deleting bucket..."
+            if aws s3api delete-bucket --bucket "$bucket" 2>/dev/null; then
+                print_success "Deleted bucket: $bucket"
+                track_deletion "S3:$bucket" "success"
+                return 0
+            else
+                print_error "Failed to delete bucket: $bucket (attempt $((retry_count + 1))/$max_retries)"
+            fi
         else
-            print_info "S3 bucket $bucket does not exist or is not accessible."
+            print_info "Bucket $bucket not found"
+            return 0
+        fi
+        
+        retry_count=$((retry_count + 1))
+        if [[ $retry_count -lt $max_retries ]]; then
+            sleep 5
         fi
     done
     
-    # Final verification
-    print_info "Verifying S3 bucket deletions..."
-    local remaining_buckets=$(aws s3api list-buckets --region "$AWS_REGION" \
-        --query "Buckets[?contains(Name, '$PROJECT_PREFIX')].Name" --output text 2>/dev/null || true)
+    track_deletion "S3:$bucket" "failed"
+    return 1
+}
+
+# Delete S3 buckets
+delete_s3_buckets() {
+    print_step "Deleting S3 buckets..."
     
-    if [[ -n "$remaining_buckets" ]]; then
-        print_warning "Some S3 buckets are still present:"
-        for bucket in $remaining_buckets; do
-            print_warning "  - $bucket"
+    local buckets=(
+        "${PROJECT_PREFIX}-raw-${ENVIRONMENT}"
+        "${PROJECT_PREFIX}-clean-${ENVIRONMENT}"
+        "${PROJECT_PREFIX}-analytics-${ENVIRONMENT}"
+        "${PROJECT_PREFIX}-athena-results-${ENVIRONMENT}"
+    )
+    
+    for bucket in "${buckets[@]}"; do
+        delete_s3_bucket "$bucket"
+    done
+}
+
+# Terminate EMR clusters
+terminate_emr_clusters() {
+    print_step "Checking for EMR clusters..."
+    
+    local cluster_ids=$(aws emr list-clusters \
+        --active \
+        --query "Clusters[?Name=='${PROJECT_PREFIX}-emr-cluster-${ENVIRONMENT}'].Id" \
+        --output text 2>/dev/null)
+    
+    if [[ -n "$cluster_ids" ]]; then
+        for cluster_id in $cluster_ids; do
+            print_info "Terminating EMR cluster: $cluster_id"
+            if aws emr terminate-clusters --cluster-ids "$cluster_id" 2>/dev/null; then
+                print_success "Terminated EMR cluster: $cluster_id"
+                track_deletion "EMR:$cluster_id" "success"
+            else
+                print_error "Failed to terminate EMR cluster: $cluster_id"
+                track_deletion "EMR:$cluster_id" "failed"
+            fi
         done
-        print_warning "Please check these manually in the AWS Console"
     else
-        print_info "All S3 buckets have been successfully deleted!"
+        print_info "No active EMR clusters found"
     fi
 }
 
-# Function to delete CloudFormation stacks
-cleanup_cloudformation() {
-    print_step "Deleting CloudFormation stacks..."
+# Delete EC2 key pairs
+delete_ec2_key_pairs() {
+    print_step "Checking for EC2 key pairs..."
     
-    # Auto-discover all stacks related to this project
-    print_info "Discovering all CloudFormation stacks for project: $PROJECT_PREFIX"
-    local discovered_stacks=$(aws cloudformation list-stacks --region "$AWS_REGION" \
-        --query "StackSummaries[?contains(StackName, '$PROJECT_PREFIX')].{Name:StackName,Status:StackStatus}" \
-        --output text 2>/dev/null | grep -v "DELETE_COMPLETE" | awk '{print $1}' || true)
+    # Pattern to match project-created key pairs
+    local key_pattern="${PROJECT_PREFIX}-emr-key"
     
-    # Convert to array and add known stacks as fallback
-    local stacks=()
-    if [[ -n "$discovered_stacks" ]]; then
-        # Add discovered stacks
-        for stack in $discovered_stacks; do
-            stacks+=("$stack")
+    # Get all key pairs matching the pattern
+    local key_pairs=$(aws ec2 describe-key-pairs \
+        --query "KeyPairs[?contains(KeyName, '${key_pattern}')].KeyName" \
+        --output text 2>/dev/null)
+    
+    if [[ -n "$key_pairs" ]]; then
+        for key_name in $key_pairs; do
+            print_info "Deleting EC2 key pair: $key_name"
+            if aws ec2 delete-key-pair --key-name "$key_name" 2>/dev/null; then
+                print_success "Deleted EC2 key pair: $key_name"
+                track_deletion "EC2:KeyPair:$key_name" "success"
+                
+                # Also delete local .pem file if exists
+                if [[ -f "${key_name}.pem" ]]; then
+                    rm -f "${key_name}.pem"
+                    print_info "Removed local key file: ${key_name}.pem"
+                fi
+            else
+                print_error "Failed to delete EC2 key pair: $key_name"
+                track_deletion "EC2:KeyPair:$key_name" "failed"
+            fi
         done
-        print_info "Found ${#stacks[@]} CloudFormation stacks to delete"
     else
-        # Fallback to predefined stack names
-        print_warning "No stacks discovered automatically, using predefined list"
-        stacks=(
-            "datalake-lake-formation-${ENVIRONMENT}"
-            "datalake-glue-catalog-${ENVIRONMENT}"
-            "datalake-iam-roles-${ENVIRONMENT}"
-            "datalake-s3-storage-${ENVIRONMENT}"
-            "datalake-cost-monitoring-${ENVIRONMENT}"
-        )
+        print_info "No project EC2 key pairs found"
     fi
     
-    # Delete stacks in dependency order (reverse of creation order)
-    print_info "Deleting stacks in correct dependency order..."
-    local deletion_order=()
+    # Check for any remaining .pem files
+    local pem_files=$(ls ${PROJECT_PREFIX}-emr-key-*.pem 2>/dev/null)
+    if [[ -n "$pem_files" ]]; then
+        print_info "Cleaning up remaining .pem files..."
+        for pem_file in $pem_files; do
+            rm -f "$pem_file"
+            print_info "Removed: $pem_file"
+        done
+    fi
+}
+
+# Delete Glue resources
+delete_glue_resources() {
+    print_step "Deleting Glue resources..."
     
-    # Add stacks in deletion order (dependencies first)
-    for stack in "${stacks[@]}"; do
-        case "$stack" in
-            *"lake-formation"*|*"glue-catalog"*)
-                deletion_order=("$stack" "${deletion_order[@]}")  # Add to front
-                ;;
-            *"iam-roles"*)
-                deletion_order+=("$stack")  # Add to end
-                ;;
-            *"s3-storage"*)
-                deletion_order+=("$stack")  # Add to end (last)
-                ;;
-            *)
-                deletion_order=("$stack" "${deletion_order[@]}")  # Other stacks go first
-                ;;
-        esac
-    done
-    
-    # Delete stacks
-    for stack in "${deletion_order[@]}"; do
-        if aws cloudformation describe-stacks --stack-name "$stack" --region "$AWS_REGION" &>/dev/null; then
-            local stack_status=$(aws cloudformation describe-stacks --stack-name "$stack" --region "$AWS_REGION" \
-                --query "Stacks[0].StackStatus" --output text 2>/dev/null)
-            
-            if [[ "$stack_status" == "DELETE_IN_PROGRESS" ]]; then
-                print_info "Stack $stack is already being deleted"
-            elif [[ "$stack_status" != "DELETE_COMPLETE" ]]; then
-                print_info "Deleting CloudFormation stack: $stack (status: $stack_status)"
-                aws cloudformation delete-stack --stack-name "$stack" --region "$AWS_REGION"
+    # Delete crawlers
+    for crawler in "${PROJECT_PREFIX}-raw-crawler" "${PROJECT_PREFIX}-clean-crawler" "${PROJECT_PREFIX}-raw-crawler-simple"; do
+        if aws glue get-crawler --name "$crawler" &>/dev/null; then
+            print_info "Deleting crawler: $crawler"
+            if aws glue delete-crawler --name "$crawler" 2>/dev/null; then
+                print_success "Deleted crawler: $crawler"
+                track_deletion "Glue:Crawler:$crawler" "success"
+            else
+                print_error "Failed to delete crawler: $crawler"
+                track_deletion "Glue:Crawler:$crawler" "failed"
             fi
-        else
-            print_info "CloudFormation stack $stack does not exist or already deleted."
         fi
     done
     
-    # Wait for all stacks to be deleted with timeout
-    print_info "Waiting for stack deletions to complete..."
-    local timeout=1800  # 30 minutes timeout
-    local start_time=$(date +%s)
-    
-    for stack in "${deletion_order[@]}"; do
-        # Check if stack exists before waiting
-        if ! aws cloudformation describe-stacks --stack-name "$stack" --region "$AWS_REGION" &>/dev/null; then
-            print_info "Stack $stack does not exist or already deleted"
-            continue
+    # Delete tables - use correct database name with hyphen
+    local database="${PROJECT_PREFIX}-db"
+    if aws glue get-database --name "$database" &>/dev/null; then
+        # Get all tables in the database
+        local tables=$(aws glue get-tables --database-name "$database" --query 'TableList[].Name' --output text 2>/dev/null)
+        if [[ -n "$tables" ]]; then
+            for table in $tables; do
+                print_info "Deleting table: $table"
+                if aws glue delete-table --database-name "$database" --name "$table" 2>/dev/null; then
+                    print_success "Deleted table: $table"
+                    track_deletion "Glue:Table:$table" "success"
+                else
+                    print_error "Failed to delete table: $table"
+                    track_deletion "Glue:Table:$table" "failed"
+                fi
+            done
         fi
         
-        print_info "Waiting for stack deletion: $stack"
-        local waited=0
-        while aws cloudformation describe-stacks --stack-name "$stack" --region "$AWS_REGION" &>/dev/null; do
-            local current_time=$(date +%s)
-            local elapsed=$((current_time - start_time))
+        # Delete the database
+        print_info "Deleting database: $database"
+        if aws glue delete-database --name "$database" 2>/dev/null; then
+            print_success "Deleted database: $database"
+            track_deletion "Glue:Database:$database" "success"
+        else
+            print_error "Failed to delete database: $database"
+            track_deletion "Glue:Database:$database" "failed"
+        fi
+    else
+        print_info "Database $database not found"
+    fi
+}
+
+# Delete CloudFormation stack with retry logic
+delete_cloudformation_stack() {
+    local stack="$1"
+    local max_wait_time=300  # 5 minutes
+    
+    # Check if stack exists
+    local stack_status=$(aws cloudformation describe-stacks \
+        --stack-name "$stack" \
+        --query 'Stacks[0].StackStatus' \
+        --output text 2>/dev/null)
+    
+    if [[ -z "$stack_status" ]]; then
+        print_info "Stack $stack not found"
+        return 0
+    fi
+    
+    # Handle DELETE_FAILED stacks
+    if [[ "$stack_status" == "DELETE_FAILED" ]]; then
+        if [[ "$RETRY_FAILED" == "true" ]]; then
+            print_warning "Stack $stack is in DELETE_FAILED state, retrying deletion..."
             
-            if [[ $elapsed -gt $timeout ]]; then
-                print_warning "Timeout waiting for stack $stack deletion after ${timeout}s"
-                break
+            # Get failed resources
+            local failed_resources=$(aws cloudformation describe-stack-events \
+                --stack-name "$stack" \
+                --query "StackEvents[?ResourceStatus=='DELETE_FAILED'].ResourceType" \
+                --output text 2>/dev/null)
+            
+            if [[ -n "$failed_resources" ]]; then
+                print_info "Failed resources: $failed_resources"
             fi
+        else
+            print_warning "Stack $stack is in DELETE_FAILED state. Use --retry-failed to force deletion"
+            track_deletion "CF:$stack" "failed"
+            return 1
+        fi
+    fi
+    
+    # Delete the stack
+    print_info "Deleting stack: $stack"
+    if aws cloudformation delete-stack --stack-name "$stack" 2>/dev/null; then
+        print_info "Waiting for stack deletion (timeout: ${max_wait_time}s)..."
+        
+        # Custom wait with timeout
+        local elapsed=0
+        while [[ $elapsed -lt $max_wait_time ]]; do
+            local status=$(aws cloudformation describe-stacks \
+                --stack-name "$stack" \
+                --query 'Stacks[0].StackStatus' \
+                --output text 2>/dev/null)
             
-            local stack_status=$(aws cloudformation describe-stacks --stack-name "$stack" --region "$AWS_REGION" \
-                --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
-            
-            if [[ "$stack_status" == "DELETE_FAILED" ]]; then
-                print_error "Stack $stack deletion failed. Status: $stack_status"
-                print_warning "Please check AWS Console for details and manually delete if needed"
-                break
-            fi
-            
-            if [[ "$stack_status" == "NOT_FOUND" ]]; then
-                print_info "Stack $stack has been successfully deleted"
-                break
-            fi
-            
-            if [[ $((waited % 30)) -eq 0 ]]; then  # Print status every 30 seconds
-                print_info "Stack $stack status: $stack_status (${elapsed}s elapsed)"
+            if [[ -z "$status" ]]; then
+                print_success "Stack deleted: $stack"
+                track_deletion "CF:$stack" "success"
+                return 0
+            elif [[ "$status" == "DELETE_FAILED" ]]; then
+                print_error "Stack deletion failed: $stack"
+                track_deletion "CF:$stack" "failed"
+                return 1
             fi
             
             sleep 10
-            waited=$((waited + 10))
+            elapsed=$((elapsed + 10))
         done
         
-        # Final check
-        if ! aws cloudformation describe-stacks --stack-name "$stack" --region "$AWS_REGION" &>/dev/null; then
-            print_info "Stack $stack deletion completed successfully"
+        print_warning "Stack deletion timed out: $stack"
+        track_deletion "CF:$stack" "timeout"
+        return 1
+    else
+        print_error "Failed to initiate stack deletion: $stack"
+        track_deletion "CF:$stack" "failed"
+        return 1
+    fi
+}
+
+# Delete CloudFormation stacks
+delete_cloudformation_stacks() {
+    print_step "Deleting CloudFormation stacks..."
+    
+    # Delete in dependency order
+    local stacks=(
+        "datalake-lake-formation-${ENVIRONMENT}"
+        "datalake-iam-roles-${ENVIRONMENT}"
+        "datalake-s3-storage-${ENVIRONMENT}"
+        "datalake-cost-monitoring-${ENVIRONMENT}"
+    )
+    
+    for stack in "${stacks[@]}"; do
+        delete_cloudformation_stack "$stack"
+    done
+}
+
+# Delete CloudWatch logs
+delete_cloudwatch_logs() {
+    if [[ "$DELETE_LOGS" == "true" ]]; then
+        print_step "Deleting CloudWatch logs..."
+        
+        # Find all log groups related to the project
+        local log_groups=$(aws logs describe-log-groups \
+            --log-group-name-prefix "/aws-glue/" \
+            --query "logGroups[?contains(logGroupName, '${PROJECT_PREFIX}')].logGroupName" \
+            --output text 2>/dev/null)
+        
+        if [[ -n "$log_groups" ]]; then
+            for log_group in $log_groups; do
+                print_info "Deleting log group: $log_group"
+                if aws logs delete-log-group --log-group-name "$log_group" 2>/dev/null; then
+                    print_success "Deleted log group: $log_group"
+                    track_deletion "Logs:$log_group" "success"
+                else
+                    print_error "Failed to delete log group: $log_group"
+                    track_deletion "Logs:$log_group" "failed"
+                fi
+            done
+        else
+            print_info "No log groups found"
+        fi
+    fi
+}
+
+# Clean up local files
+cleanup_local_files() {
+    print_step "Cleaning up local files..."
+    
+    local files=(
+        "configs/env-vars.sh"
+        "configs/emr-cluster.env"
+        "deployment.log"
+        "deployment-summary.txt"
+        "DEPLOYMENT_FIXES_SUMMARY.md"
+    )
+    
+    for file in "${files[@]}"; do
+        if [[ -f "$file" ]]; then
+            rm -f "$file"
+            print_info "Removed: $file"
         fi
     done
+}
+
+# Generate cleanup report
+generate_cleanup_report() {
+    print_step "Generating cleanup report..."
     
-    # Final verification
-    print_info "Verifying stack deletions..."
-    local remaining_stacks=$(aws cloudformation list-stacks --region "$AWS_REGION" \
-        --query "StackSummaries[?contains(StackName, '$PROJECT_PREFIX')].{Name:StackName,Status:StackStatus}" \
-        --output text 2>/dev/null | grep -v "DELETE_COMPLETE" | awk '{print $1}' || true)
+    local report_file="cleanup-report-$(date +%Y%m%d-%H%M%S).txt"
     
-    if [[ -n "$remaining_stacks" ]]; then
-        print_warning "Some stacks are still present:"
-        for stack in $remaining_stacks; do
-            local status=$(aws cloudformation describe-stacks --stack-name "$stack" --region "$AWS_REGION" \
-                --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "UNKNOWN")
-            print_warning "  - $stack: $status"
-        done
-        print_warning "Please check these manually in the AWS Console"
-    else
-        print_info "All CloudFormation stacks have been successfully deleted!"
+    cat > "$report_file" << EOF
+AWS Data Lake Cleanup Report
+Generated: $(date)
+=====================================
+
+Configuration:
+- Project: $PROJECT_PREFIX
+- Environment: $ENVIRONMENT
+- Region: $AWS_REGION
+
+Options Used:
+- Force: $FORCE
+- Delete Logs: $DELETE_LOGS
+- Retry Failed: $RETRY_FAILED
+- Deep Clean: $DEEP_CLEAN
+
+SUCCESSFUL DELETIONS (${#SUCCESSFUL_DELETIONS[@]}):
+EOF
+    
+    for item in "${SUCCESSFUL_DELETIONS[@]}"; do
+        echo "✅ $item" >> "$report_file"
+    done
+    
+    echo -e "\nFAILED DELETIONS (${#FAILED_DELETIONS[@]}):" >> "$report_file"
+    
+    for item in "${FAILED_DELETIONS[@]}"; do
+        echo "❌ $item" >> "$report_file"
+    done
+    
+    echo -e "\n=====================================\n" >> "$report_file"
+    
+    print_info "Cleanup report saved to: $report_file"
+    
+    # Display summary
+    echo
+    print_info "Cleanup Summary:"
+    print_success "Successful deletions: ${#SUCCESSFUL_DELETIONS[@]}"
+    if [[ ${#FAILED_DELETIONS[@]} -gt 0 ]]; then
+        print_error "Failed deletions: ${#FAILED_DELETIONS[@]}"
+        print_warning "Check $report_file for details"
     fi
 }
 
-# Function to cleanup CloudWatch logs
-cleanup_cloudwatch_logs() {
-    print_step "Cleaning up CloudWatch logs..."
-    
-    local log_groups=$(aws logs describe-log-groups --region "$AWS_REGION" \
-        --query "logGroups[?contains(logGroupName, '$PROJECT_PREFIX')].logGroupName" --output text 2>/dev/null || true)
-    
-    if [[ -n "$log_groups" ]]; then
-        for log_group in $log_groups; do
-            print_info "Deleting log group: $log_group"
-            aws logs delete-log-group --log-group-name "$log_group" --region "$AWS_REGION" || true
-        done
-    fi
-}
-
-# Main cleanup function
+# Main function
 main() {
-    print_info "Starting AWS Data Lake cleanup process..."
+    echo "=========================================="
+    echo "AWS Data Lake Cleanup"
+    echo "=========================================="
     
-    check_aws_cli
-    load_config
+    load_configuration
     confirm_deletion
     
-    # Execute cleanup in order
-    cleanup_emr_clusters
-    cleanup_databrew
-    cleanup_glue
-    cleanup_lake_formation
-    cleanup_s3_buckets
-    cleanup_cloudformation
-    cleanup_cloudwatch_logs
+    # Record start time
+    START_TIME=$(date +%s)
     
-    print_info "Cleanup completed successfully!"
-    print_warning "Please verify in the AWS console that all resources have been removed."
-    print_warning "Check for any remaining charges in your AWS billing dashboard."
+    # Perform cleanup
+    terminate_emr_clusters
+    delete_ec2_key_pairs
+    delete_glue_resources
+    delete_s3_buckets
+    delete_cloudformation_stacks
+    delete_cloudwatch_logs
+    cleanup_local_files
+    
+    # Calculate duration
+    END_TIME=$(date +%s)
+    DURATION=$((END_TIME - START_TIME))
+    
+    # Generate report
+    generate_cleanup_report
+    
+    print_step "Cleanup Complete!"
+    echo -e "\n${GREEN}✅ Cleanup process finished in ${DURATION} seconds${NC}"
+    
+    if [[ ${#FAILED_DELETIONS[@]} -gt 0 ]]; then
+        echo -e "${YELLOW}⚠️  Some resources failed to delete. Run with --retry-failed to retry${NC}"
+    else
+        echo -e "${GREEN}🎉 All resources have been successfully deleted${NC}"
+    fi
 }
 
-# Run the main function
-main "$@"
+# Run main function
+main

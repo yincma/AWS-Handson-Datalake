@@ -1,17 +1,20 @@
 -- Athena SQL Queries for Data Lake Analytics
--- These queries demonstrate how to analyze the processed data in the Analytics layer
+-- These queries demonstrate how to analyze data in the data lake
+-- 
+-- NOTE: This file contains examples for creating analytics tables.
+-- For basic queries, use the main database "dl-handson-db" directly.
 
 -- =============================================================================
 -- 1. CREATE EXTERNAL TABLES
 -- =============================================================================
 
 -- Create database (run this first)
-CREATE DATABASE IF NOT EXISTS dl_handson_analytics
+CREATE DATABASE IF NOT EXISTS "dl-handson-analytics"
 COMMENT 'Data Lake Analytics Database'
-LOCATION 's3://your-analytics-bucket/analytics/';
+LOCATION 's3://dl-handson-analytics-dev/analytics/';
 
 -- Customer Analytics Table
-CREATE EXTERNAL TABLE IF NOT EXISTS dl_handson_analytics.customer_analytics (
+CREATE EXTERNAL TABLE IF NOT EXISTS "dl-handson-analytics".customer_analytics (
     customer_id bigint,
     first_name string,
     last_name string,
@@ -34,7 +37,7 @@ LOCATION 's3://your-analytics-bucket/analytics/customer_analytics/'
 TBLPROPERTIES ('has_encrypted_data'='false');
 
 -- Product Analytics Table
-CREATE EXTERNAL TABLE IF NOT EXISTS dl_handson_analytics.product_analytics (
+CREATE EXTERNAL TABLE IF NOT EXISTS "dl-handson-analytics".product_analytics (
     product_id string,
     product_name string,
     category string,
@@ -54,7 +57,7 @@ LOCATION 's3://your-analytics-bucket/analytics/product_analytics/'
 TBLPROPERTIES ('has_encrypted_data'='false');
 
 -- Monthly Sales Table (partitioned)
-CREATE EXTERNAL TABLE IF NOT EXISTS dl_handson_analytics.monthly_sales (
+CREATE EXTERNAL TABLE IF NOT EXISTS "dl-handson-analytics".monthly_sales (
     currency string,
     total_orders bigint,
     total_revenue double,
@@ -75,7 +78,7 @@ LOCATION 's3://your-analytics-bucket/analytics/monthly_sales/'
 TBLPROPERTIES ('has_encrypted_data'='false');
 
 -- Add partitions for monthly sales (update these based on your data)
-MSCK REPAIR TABLE dl_handson_analytics.monthly_sales;
+MSCK REPAIR TABLE "dl-handson-analytics".monthly_sales;
 
 -- =============================================================================
 -- 2. CUSTOMER ANALYSIS QUERIES
@@ -91,7 +94,7 @@ SELECT
     total_spent,
     total_orders,
     avg_order_value
-FROM dl_handson_analytics.customer_analytics
+FROM "dl-handson-analytics".customer_analytics
 WHERE total_spent > 0
 ORDER BY total_spent DESC
 LIMIT 10;
@@ -105,7 +108,7 @@ SELECT
     AVG(total_orders) as avg_total_orders,
     AVG(avg_order_value) as avg_order_value,
     SUM(total_spent) as total_revenue
-FROM dl_handson_analytics.customer_analytics
+FROM "dl-handson-analytics".customer_analytics
 WHERE total_spent > 0
 GROUP BY customer_segment, country
 ORDER BY total_revenue DESC;
@@ -120,7 +123,7 @@ SELECT
     COUNT(*) as customer_count,
     AVG(total_spent) as avg_total_spent,
     SUM(total_spent) as total_revenue
-FROM dl_handson_analytics.customer_analytics
+FROM "dl-handson-analytics".customer_analytics
 WHERE total_spent > 0
 GROUP BY 
     CASE 
@@ -146,7 +149,7 @@ SELECT
     total_orders,
     unique_customers,
     revenue_per_unit
-FROM dl_handson_analytics.product_analytics
+FROM "dl-handson-analytics".product_analytics
 ORDER BY total_revenue DESC
 LIMIT 20;
 
@@ -158,7 +161,7 @@ SELECT
     SUM(total_revenue) as total_category_revenue,
     AVG(price) as avg_product_price,
     SUM(unique_customers) as total_unique_customers
-FROM dl_handson_analytics.product_analytics
+FROM "dl-handson-analytics".product_analytics
 GROUP BY category
 ORDER BY total_category_revenue DESC;
 
@@ -170,7 +173,7 @@ SELECT
     AVG(price) as avg_product_price,
     SUM(total_quantity_sold) as total_quantity_sold,
     AVG(revenue_per_unit) as avg_revenue_per_unit
-FROM dl_handson_analytics.product_analytics
+FROM "dl-handson-analytics".product_analytics
 GROUP BY brand
 ORDER BY total_brand_revenue DESC;
 
@@ -185,7 +188,7 @@ SELECT
     (total_revenue - total_discounts_given) as net_revenue,
     (total_discounts_given / total_revenue * 100) as discount_percentage,
     total_quantity_sold
-FROM dl_handson_analytics.product_analytics
+FROM "dl-handson-analytics".product_analytics
 WHERE total_revenue > 1000
 ORDER BY (total_revenue - total_discounts_given) DESC
 LIMIT 15;
@@ -205,7 +208,7 @@ SELECT
     net_revenue,
     avg_order_value,
     unique_customers
-FROM dl_handson_analytics.monthly_sales
+FROM "dl-handson-analytics".monthly_sales
 ORDER BY order_year, order_month, currency;
 
 -- Year-over-year growth (if you have multiple years)
@@ -215,7 +218,7 @@ WITH monthly_totals AS (
         order_month,
         SUM(total_revenue) as monthly_revenue,
         SUM(total_orders) as monthly_orders
-    FROM dl_handson_analytics.monthly_sales
+    FROM "dl-handson-analytics".monthly_sales
     GROUP BY order_year, order_month
 )
 SELECT 
@@ -239,7 +242,7 @@ SELECT
     SUM(total_orders) as total_orders,
     AVG(avg_order_value) as avg_order_value,
     SUM(unique_customers) as total_customers
-FROM dl_handson_analytics.monthly_sales
+FROM "dl-handson-analytics".monthly_sales
 GROUP BY currency
 ORDER BY total_revenue DESC;
 
@@ -256,7 +259,7 @@ WITH customer_metrics AS (
         total_spent,
         total_orders,
         DATE_DIFF('day', first_order_date, last_order_date) as customer_lifespan_days
-    FROM dl_handson_analytics.customer_analytics
+    FROM "dl-handson-analytics".customer_analytics
     WHERE total_orders > 1 AND first_order_date IS NOT NULL AND last_order_date IS NOT NULL
 )
 SELECT 
@@ -287,7 +290,7 @@ SELECT
     COUNT(customer_id) as non_null_customer_id,
     COUNT(total_spent) as non_null_total_spent,
     AVG(total_spent) as avg_total_spent
-FROM dl_handson_analytics.customer_analytics
+FROM "dl-handson-analytics".customer_analytics
 
 UNION ALL
 
@@ -297,14 +300,14 @@ SELECT
     COUNT(product_id) as non_null_product_id,
     COUNT(total_revenue) as non_null_total_revenue,
     AVG(total_revenue) as avg_total_revenue
-FROM dl_handson_analytics.product_analytics;
+FROM "dl-handson-analytics".product_analytics;
 
 -- Check for data freshness
 SELECT 
     'customer_analytics' as table_name,
     MAX(last_order_date) as latest_order_date,
     MIN(first_order_date) as earliest_order_date
-FROM dl_handson_analytics.customer_analytics
+FROM "dl-handson-analytics".customer_analytics
 
 UNION ALL
 
@@ -312,7 +315,7 @@ SELECT
     'monthly_sales' as table_name,
     CAST(MAX(order_year) AS VARCHAR) || '-' || CAST(MAX(order_month) AS VARCHAR) as latest_period,
     CAST(MIN(order_year) AS VARCHAR) || '-' || CAST(MIN(order_month) AS VARCHAR) as earliest_period
-FROM dl_handson_analytics.monthly_sales;
+FROM "dl-handson-analytics".monthly_sales;
 
 -- =============================================================================
 -- NOTES:

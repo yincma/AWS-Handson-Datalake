@@ -1,10 +1,11 @@
 # AWS Credentials and Config
 .aws/
 *credentials*
-*config.local.env
 
-# Environment Variables
+# Environment Variables and Runtime Generated Files
 configs/env-vars.sh
+configs/config.local.env
+configs/emr-cluster.env
 
 # Python
 __pycache__/
@@ -47,6 +48,10 @@ logs/
 *.tar.gz
 *.rar
 
+# EC2 Key Pairs (IMPORTANT: Never commit private keys!)
+*.pem
+*.ppk
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
@@ -76,3 +81,19 @@ temp/
 
 # CloudFormation
 packaged-template.yaml
+
+# Deployment logs and reports
+deployment.log
+deployment-summary.txt
+
+# EMR cluster specific files (runtime generated)
+emr-cluster-*.env
+cluster-info-*.txt
+
+# Development and temporary documentation (not for production)
+*_SUMMARY.md
+*_FIXES.md
+*_UPDATE*.md
+*-report-*.txt
+cleanup-report*.txt
+backup/

@@ -113,23 +113,33 @@ Datalake/
 │   ├── config.local.env       # ローカル設定オーバーライド（オプション）
 │   └── env-vars.sh            # 環境変数（自動生成）
 ├── scripts/                   # 自動化スクリプト
-│   ├── setup-env.sh          # 環境初期化
+│   ├── deploy-all.sh         # ワンクリック完全デプロイ
+│   ├── setup-env.sh          # 基盤インフラストラクチャデプロイ
 │   ├── cleanup.sh            # リソース清理
 │   ├── create-emr-cluster.sh # EMRクラスター作成
-│   ├── cost-optimization.sh  # コスト最適化
+│   ├── cost-optimization.sh  # コスト最適化ツール
 │   ├── submit_pyspark_job.sh # Sparkジョブ送信
 │   ├── pyspark_analytics.py  # PySparkアナリティクススクリプト
-│   └── athena_queries.sql    # Athena クエリサンプル
+│   ├── athena_queries.sql    # Athena クエリサンプル
+│   └── utils/                # ユーティリティスクリプト
+│       ├── README.md         # ユーティリティ説明
+│       ├── check-resources.sh # リソース確認スクリプト
+│       ├── create_glue_tables.py # Glueテーブル作成
+│       ├── delete-s3-versions.py # S3バージョン削除ツール
+│       ├── export_env_template.sh # 環境変数テンプレート
+│       └── table_schemas.json # テーブルスキーマ定義
 ├── templates/                 # CloudFormation テンプレート
-│   ├── s3-storage-layer.yaml      # S3 ストレージ層
-│   ├── iam-roles-policies.yaml    # IAM ロール権限
-│   ├── lake-formation.yaml        # Lake Formation 設定
-│   └── cost-monitoring.yaml       # コスト監視
+│   ├── s3-storage-layer.yaml        # S3 ストレージ層
+│   ├── iam-roles-policies.yaml      # IAM ロール権限
+│   ├── lake-formation-simple.yaml   # Lake Formation 設定（簡易版）
+│   ├── lake-formation.yaml          # Lake Formation 設定（完全版）
+│   └── cost-monitoring.yaml         # コスト監視
 └── sample-data/               # サンプルデータセット
-    ├── customers.csv          # 顧客データ
-    ├── orders.csv            # 注文データ
-    ├── order_items.csv       # 注文明細
-    └── products.csv          # 製品データ
+    ├── README.md             # データセット説明書
+    ├── customers.csv         # 顧客データ
+    ├── orders.csv           # 注文データ
+    ├── order_items.csv      # 注文明細
+    └── products.csv         # 製品データ
 ```
 
 ## コア機能
@@ -152,13 +162,20 @@ Datalake/
 - **監査ログ**: CloudTrail統合、完全な操作監査
 - **列レベル権限**: Lake Formationの細かいデータアクセス制御
 
-### 4. コスト最適化
-- **自動クリーンアップ**: 完全なリソースクリーンアップスクリプト（オプションコンポーネント検出サポート）
+### 4. ワンクリックデプロイメント
+- **統合デプロイ**: `deploy-all.sh`によるワンクリック完全デプロイ
+- **段階的デプロイ**: 基盤インフラ → EMRクラスター → データ分析の柔軟な組み合わせ
+- **オプション選択**: `--with-emr`、`--with-analytics`による必要な機能のみデプロイ
+- **自動検証**: デプロイ後の各コンポーネント動作確認と詳細レポート生成
+
+### 5. コスト最適化
+- **完全自動クリーンアップ**: 深層クリーンアップ機能でS3バージョン化オブジェクトも完全削除
+- **エラー回復機能**: DELETE_FAILEDスタックの自動リトライ機能
 - **ライフサイクル管理**: S3オブジェクトの自動アーカイブと削除
 - **オンデマンド計算**: EMRクラスターのオンデマンド起動停止（Spotインスタンスサポート）
 - **コスト監視**: CloudWatchコスト警告と予算アラート
 
-### 5. サンプルデータセット
+### 6. サンプルデータセット
 Eコマースシナリオの完全なデータセットを提供：
 - **customers.csv**: 顧客基本情報
 - **products.csv**: 製品カタログデータ
@@ -238,20 +255,49 @@ Eコマースシナリオの完全なデータセットを提供：
 
 ## クイックスタート
 
-1. AWS環境を設定します：
-   ```bash
-   ./scripts/setup-env.sh
-   ```
+### 🚀 ワンクリック完全デプロイ
 
-2. データ処理用EMRクラスターを作成します：
-   ```bash
-   ./scripts/create-emr-cluster.sh --key-name <your-key> --subnet-id <your-subnet>
-   ```
+#### 基本デプロイ（インフラストラクチャのみ）
+```bash
+./scripts/deploy-all.sh
+```
 
-3. 完了後にリソースをクリーンアップします：
-   ```bash
-   ./scripts/cleanup.sh
-   ```
+#### 完全デプロイ（EMRクラスター + データ分析含む）
+```bash
+# 自動設定で完全デプロイ（推奨）
+# キーペアとサブネットは自動検出・作成されます
+./scripts/deploy-all.sh --with-emr --with-analytics
+
+# 手動でキーペアとサブネットを指定する場合
+./scripts/deploy-all.sh --with-emr --with-analytics \
+  --key-name <your-key> --subnet-id <your-subnet>
+```
+
+> **自動設定機能**:
+> - 既存のEC2キーペアを自動検出して使用
+> - キーペアが存在しない場合は自動作成（プライベートキーは `.pem` ファイルとして保存）
+> - デフォルトVPCのサブネットを自動使用
+
+#### リソースクリーンアップ
+```bash
+# 標準クリーンアップ（推奨）
+./scripts/cleanup.sh --force --deep-clean --retry-failed
+
+# 基本クリーンアップ（非推奨：一部リソースが残る可能性あり）
+./scripts/cleanup.sh --force
+```
+
+### 📋 デプロイオプション
+
+| オプション | 説明 | 必要な追加パラメータ |
+|-----------|------|-------------------|
+| 基本 | S3、IAM、Lake Formation、Glue | なし |
+| `--with-emr` | 上記 + EMRクラスター | なし（自動検出） |
+| `--with-analytics` | 上記 + PySpark分析ジョブ | EMRオプションが必要 |
+
+**EMR自動設定詳細**:
+- `--key-name` (オプション): 指定しない場合、既存キーペアを検出または新規作成
+- `--subnet-id` (オプション): 指定しない場合、デフォルトVPCのサブネットを自動使用
 
 ### 🔗 便利なリンク
 
@@ -265,7 +311,9 @@ Eコマースシナリオの完全なデータセットを提供：
 
 ## ステップバイステップデプロイガイド
 
-より詳細な制御と学習体験のため、以下のステップバイステップデプロイガイドを提供します。各ステップで実行内容を理解し、カスタマイズできます。
+ワンクリックデプロイ（`deploy-all.sh`）に加えて、より詳細な制御と学習体験のため、以下のステップバイステップデプロイガイドを提供します。各ステップで実行内容を理解し、カスタマイズできます。
+
+> **推奨**: 初回は`deploy-all.sh`でデプロイを体験し、理解を深めてから個別コンポーネントのカスタマイズにチャレンジしてください。
 
 ### デプロイ準備
 
@@ -283,6 +331,9 @@ aws configure get region
 
 #### 📝 設定ファイルのカスタマイズ
 ```bash
+# deploy-all.shは自動で設定ファイルを作成しますが、
+# 手動でカスタマイズする場合は以下を実行：
+
 # ローカル設定ファイルを作成
 cp configs/config.env configs/config.local.env
 
@@ -304,6 +355,8 @@ export EMAIL_ADDRESS="your-email@example.com"
 ```
 
 ### 基盤インフラストラクチャのデプロイ
+
+> **注意**: 以下は個別コンポーネントのデプロイ方法です。ワンクリックデプロイを使用する場合は`deploy-all.sh`のみで十分です。
 
 #### 1️⃣ S3ストレージ層の作成
 ```bash
@@ -413,6 +466,11 @@ aws databrew start-job-run --name cleaning-job
 
 #### ⚡ EMRクラスターの作成
 ```bash
+# 方法1: 自動設定（推奨）
+# キーペアとサブネットを自動検出・作成
+./scripts/create-emr-cluster.sh
+
+# 方法2: 手動設定
 # EC2キーペアを取得（EMRアクセス用）
 aws ec2 describe-key-pairs --region us-east-1
 
@@ -422,13 +480,13 @@ aws ec2 describe-subnets --region us-east-1 --query "Subnets[0].SubnetId"
 # EMRクラスターを作成（Spot instances使用でコスト削減）
 ./scripts/create-emr-cluster.sh \
   --key-name your-ec2-key-name \
-  --subnet-id subnet-xxxxxxxxx \
-  --use-spot \
-  --auto-terminate
+  --subnet-id subnet-xxxxxxxxx
 
 # クラスター状態を確認
 aws emr list-clusters --region us-east-1 --active
 ```
+
+> **ヒント**: deploy-all.sh で `--with-emr` オプションを使用すると、EMRクラスターも含めて自動デプロイされます。
 
 #### 🐍 PySparkデータ処理
 ```bash
@@ -542,7 +600,11 @@ aws s3 rm s3://dl-handson-raw-dev/temp/ --recursive
 aws s3 rm s3://dl-handson-analytics-dev/temp/ --recursive
 
 # 4. 完全クリーンアップ（全てのリソースを削除）
-./scripts/cleanup.sh
+# 標準方式：S3バージョン化オブジェクトとDELETE_FAILEDスタックも処理
+./scripts/cleanup.sh --force --deep-clean --retry-failed
+
+# クリーンアップ前にリソース状態を確認
+./scripts/utils/check-resources.sh
 ```
 
 #### 💰 コスト最適化の確認
@@ -589,6 +651,42 @@ echo "URL: https://console.aws.amazon.com/cost-management/home?region=us-east-1#
 
 本プロジェクトは教育・学習目的のみに使用してください。本番環境での直接使用は推奨されません。実際の使用前に十分なセキュリティ評価とテストを実施してください。
 
+### クリーンアップガイド
+
+#### 🧹 標準クリーンアップ手順（推奨）
+
+```bash
+# リソース状態の事前確認
+./scripts/utils/check-resources.sh
+
+# 標準クリーンアップ（全リソースを確実に削除）
+./scripts/cleanup.sh --force --deep-clean --retry-failed
+```
+
+#### クリーンアップオプション説明
+
+| オプション | 説明 | 使用場面 |
+|-----------|------|----------|
+| `--force` | 確認プロンプトをスキップ | 自動化環境での使用 |
+| `--deep-clean` | S3バージョン化オブジェクトと削除マーカーも削除 | 完全削除が必要な場合 |
+| `--retry-failed` | DELETE_FAILEDスタックを再試行 | CloudFormationスタック削除失敗時 |
+| `--delete-logs` | CloudWatchログも削除 | ログを保持する必要がない場合 |
+
+#### 🔍 クリーンアップ検証
+
+```bash
+# クリーンアップ後の確認
+./scripts/utils/check-resources.sh
+
+# 詳細な確認（手動）
+aws s3 ls | grep dl-handson  # S3バケット確認
+aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE DELETE_FAILED  # スタック確認
+aws glue get-databases  # Glueリソース確認
+```
+
 ---
 
-> **重要な注意**: 実験完了後は必ずクリーンアップスクリプトを実行し、不要なAWS料金の発生を避けてください。
+> **⚠️ 重要な注意**: 
+> - 実験完了後は必ず標準クリーンアップ（`--deep-clean --retry-failed`付き）を実行してください
+> - S3バージョニングが有効な場合、通常のクリーンアップでは全てのオブジェクトが削除されない可能性があります
+> - Lake Formationリソースが原因でスタック削除が失敗する場合は、`--retry-failed`オプションを使用してください
