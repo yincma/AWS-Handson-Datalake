@@ -5,6 +5,198 @@
 
 プロジェクトは設定駆動方式を採用し、完全なスクリプト、テンプレート、サンプルデータを提供することで、学習者が企業レベルのデータレイクのベストプラクティスを迅速にデプロイし理解できるようになると思います。
 
+## プロジェクト実行ガイド
+
+### 前提条件
+
+#### 🔧 必要な環境
+- **AWSアカウント**: 管理者権限を持つ有効なAWSアカウント
+- **AWS CLI**: インストール済みかつ認証情報が設定済み
+- **Python**: 3.7以上
+- **基礎知識**: AWS基本サービス、SQL、Pythonの基礎
+
+#### 📋 環境セットアップ
+```bash
+# AWS CLIのインストール（未インストールの場合）
+pip install awscli
+
+# AWS認証情報の設定
+aws configure
+```
+
+### クイック実行
+
+最も簡単な方法は、提供されている一括デプロイスクリプトを使用することです。
+
+#### 🚀 ワンクリックデプロイ
+```bash
+# 完全デプロイ（推奨）
+./scripts/setup-env.sh --email your-email@example.com
+
+# インフラのみデプロイ
+./scripts/setup-env.sh --mode infrastructure-only --email your-email@example.com
+
+# サンプルデータのみアップロード
+./scripts/setup-env.sh --mode sample-data-only
+```
+
+#### ⚡ 次のステップ
+デプロイ完了後：
+```bash
+# 1. Glueクローラーを開始してデータカタログを作成
+aws glue start-crawler --name dl-handson-raw-crawler --region us-east-1
+
+# 2. EMRクラスターを作成してデータ処理
+./scripts/create-emr-cluster.sh --key-name your-key --subnet-id your-subnet
+
+# 3. Sparkジョブを実行
+./scripts/submit_pyspark_job.sh
+
+# 4. Athenaでデータクエリ
+# AWS コンソールで scripts/athena_queries.sql のクエリを実行
+```
+
+### ステップバイステップ実行
+
+詳細な理解を求める場合は、以下の手順で段階的に実行できます。
+
+#### 📝 Phase 1: 環境準備
+```bash
+# 1. 設定ファイルをカスタマイズ
+cp configs/config.env configs/config.local.env
+# 必要に応じて regions, project名などを編集
+
+# 2. AWS認証情報を確認
+aws sts get-caller-identity
+
+# 3. 必要な権限をチェック
+aws iam list-roles --max-items 1
+```
+
+#### 🏗️ Phase 2: インフラデプロイ
+```bash
+# CloudFormationスタックを段階的にデプロイ
+./scripts/setup-env.sh --mode infrastructure-only --email your-email@example.com
+```
+
+これにより以下が作成されます：
+- **S3バケット**: Raw/Clean/Analytics + Athena結果用
+- **IAMロール**: DataEngineer、Analyst、GlueCrawler用
+- **Lake Formation**: データガバナンス設定
+- **Glueクローラー**: 自動スキーマ発見用
+- **コスト監視**: 予算アラートとSNS通知
+
+#### 📊 Phase 3: データ準備
+```bash
+# 1. サンプルデータをアップロード
+./scripts/setup-env.sh --mode sample-data-only
+
+# 2. データカタログを作成
+aws glue start-crawler --name dl-handson-raw-crawler --region us-east-1
+
+# 3. クローラー完了を確認
+aws glue get-crawler --name dl-handson-raw-crawler --region us-east-1
+```
+
+#### ⚡ Phase 4: データ処理
+```bash
+# 1. EMRクラスター作成
+./scripts/create-emr-cluster.sh \
+  --key-name your-ec2-key \
+  --subnet-id subnet-xxxxxxxxx \
+  --use-spot \
+  --auto-terminate
+
+# 2. PySpark分析ジョブ実行
+./scripts/submit_pyspark_job.sh
+
+# 3. ジョブ完了を確認
+aws emr list-clusters --region us-east-1
+```
+
+#### 🔍 Phase 5: データ分析
+```bash
+# Athenaワークベンチで以下を実行：
+# 1. データベースとテーブルを確認
+SHOW DATABASES;
+SHOW TABLES IN dl_handson_db;
+
+# 2. サンプルクエリ実行
+SELECT * FROM dl_handson_db.customers LIMIT 10;
+
+# 3. 高度な分析クエリ
+# scripts/athena_queries.sql のクエリを実行
+```
+
+### コスト管理
+
+#### 💰 コスト監視
+```bash
+# 現在のコストを確認
+./scripts/cost-optimization.sh
+
+# リソース使用状況をチェック
+aws s3 ls --summarize --human-readable --recursive s3://dl-handson-raw-dev/
+aws emr list-clusters --active --region us-east-1
+```
+
+#### 🧹 リソースクリーンアップ
+```bash
+# 実験完了後は必ずクリーンアップを実行
+./scripts/cleanup.sh
+
+# 手動確認（オプション）
+aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE
+aws s3 ls | grep dl-handson
+```
+
+#### 💡 コスト最適化のヒント
+- **EMRクラスター**: 使用後すぐに終了する（主要コスト要因）
+- **Spotインスタンス**: `--use-spot` フラグで60-70%コスト削減
+- **自動終了**: `--auto-terminate` で非アクティブ時自動終了
+- **リージョン選択**: us-east-1が最もコスト効率的
+
+#### 📊 予想コスト（4時間実験）
+- **オンデマンド**: 約$5-6
+- **Spotインスタンス**: 約$2-3
+- **主要コスト**: EMR (70-80%) > Glue > Athena > S3
+
+### ⚠️ 重要な注意事項
+
+1. **セキュリティ**: 実験用途のため、本番環境での直接使用は避けてください
+2. **権限**: 適切なIAM権限があることを確認してください
+3. **リージョン**: すべてのリソースを同一リージョンにデプロイしてください
+4. **クリーンアップ**: 実験完了後は必ずリソースを削除してください
+
+### 🔗 便利なリンク
+
+デプロイ完了後にアクセスできるAWSコンソール：
+- [S3管理コンソール](https://console.aws.amazon.com/s3/)
+- [Glue管理コンソール](https://console.aws.amazon.com/glue/)
+- [EMR管理コンソール](https://console.aws.amazon.com/elasticmapreduce/)
+- [Athena管理コンソール](https://console.aws.amazon.com/athena/)
+- [CloudFormation管理コンソール](https://console.aws.amazon.com/cloudformation/)
+- [コスト管理コンソール](https://console.aws.amazon.com/billing/)
+
+## 目次
+- [プロジェクト概要](#プロジェクト概要)
+- [プロジェクト実行ガイド](#プロジェクト実行ガイド)
+  - [前提条件](#前提条件-1)
+  - [クイック実行](#クイック実行)
+  - [ステップバイステップ実行](#ステップバイステップ実行)
+  - [コスト管理](#コスト管理)
+- [技術アーキテクチャ](#技術アーキテクチャ)
+- [システムアーキテクチャ概要](#システムアーキテクチャ概要)
+- [権限とガバナンスモデル](#権限とガバナンスモデル)
+- [プロジェクト構造](#プロジェクト構造)
+- [コア機能](#コア機能)
+- [実験手順](#実験手順)
+- [前提条件](#前提条件)
+- [予想時間とコスト](#予想時間とコスト)
+- [クイックスタート](#クイックスタート)
+- [拡張学習](#拡張学習)
+- [ライセンス](#ライセンス)
+
 ## 技術アーキテクチャ
 
 ### コアサービススタック
@@ -178,29 +370,6 @@ Eコマースシナリオの完全なデータセットを提供：
 1. コスト監視と最適化
 2. パフォーマンスチューニングとトラブルシューティング
 3. リソースクリーンアップと環境復旧
-
-## 学習目標
-
-本プロジェクト完了後、学習者は以下を習得できます：
-
-### 技術スキル
-- AWSデータレイクサービスの完全な使用方法
-- Infrastructure as Codeのベストプラクティス
-- ビッグデータETLパイプライン設計
-- 分散計算とSQL分析
-- データガバナンスと権限管理
-
-### アーキテクチャ能力
-- 企業レベルデータレイクアーキテクチャ設計
-- 多層データストレージ戦略
-- セキュリティとコンプライアンスアーキテクチャ
-- コスト最適化戦略
-
-### 運用スキル
-- 自動化デプロイメントと運用
-- 監視とトラブルシューティング
-- パフォーマンスチューニングと最適化
-- リソースライフサイクル管理
 
 ## 前提条件
 
