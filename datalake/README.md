@@ -16,26 +16,7 @@
 
 ### システムアーキテクチャ概要
 
-```mermaid
-graph LR
-    %% Core Components
-    S3["🗄️ Amazon S3<br/><i>3-Layer Storage</i>"]
-    Glue["🔧 AWS Glue<br/><i>ETL & Catalog</i>"]
-    EMR["⚡ Amazon EMR<br/><i>Spark Processing</i>"]
-    Athena["🔍 Amazon Athena<br/><i>SQL Analytics</i>"]
-    LF["🛡️ Lake Formation<br/><i>Data Governance</i>"]
-    
-    %% Simple Connections
-    S3 --> Glue
-    Glue --> EMR
-    EMR --> S3
-    S3 --> Athena
-    LF --> S3
-    
-    %% AWS Styling
-    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#232F3E
-    class S3,Glue,EMR,Athena,LF aws
-```
+![AWS Data Lake Architecture](./Arch.drawio.svg)
 
 ### データフロー詳細図
 
