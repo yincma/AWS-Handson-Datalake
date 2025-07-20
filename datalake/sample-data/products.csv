@@ -1,14 +1,14 @@
 product_id,product_name,category,subcategory,brand,price,cost,weight_kg,dimensions_cm,color,size,material,description,stock_quantity,min_stock_level,supplier_id,launch_date
-PROD-001,iPhone 15 Pro,Electronics,Smartphones,Apple,7999.00,5999.00,0.187,146.6x70.6x8.25,Natural Titanium,128GB,Titanium,Latest iPhone with A17 Pro chip,150,20,SUP-001,2023-09-15
-PROD-002,Samsung Galaxy S24,Electronics,Smartphones,Samsung,6999.00,5249.00,0.168,147.0x70.6x7.6,Phantom Black,256GB,Aluminum,Premium Android smartphone,200,25,SUP-002,2024-01-01
-PROD-003,MacBook Air M3,Electronics,Laptops,Apple,8999.00,6749.00,1.24,30.41x21.5x1.13,Space Gray,13-inch,Aluminum,Lightweight laptop with M3 chip,80,10,SUP-001,2024-03-01
-PROD-004,Dell XPS 13,Electronics,Laptops,Dell,7599.00,5699.00,1.19,29.57x19.86x1.47,Platinum Silver,13-inch,Carbon Fiber,Ultra-portable Windows laptop,95,15,SUP-003,2023-10-01
-PROD-005,Nike Air Max 270,Fashion,Shoes,Nike,899.00,449.00,0.65,32x21x12,Black/White,US 9,Synthetic,Comfortable running shoes,300,50,SUP-004,2023-05-01
-PROD-006,Adidas Ultraboost 22,Fashion,Shoes,Adidas,1299.00,649.00,0.72,33x22x13,Core Black,US 10,Primeknit,High-performance running shoes,250,40,SUP-005,2023-08-01
-PROD-007,Levi's 501 Jeans,Fashion,Clothing,Levi's,599.00,299.00,0.58,,,Blue,32x34,Denim,Classic straight leg jeans,180,30,SUP-006,2023-01-01
-PROD-008,Uniqlo Heattech T-shirt,Fashion,Clothing,Uniqlo,129.00,64.00,0.15,,,White,L,Cotton Blend,Thermal base layer shirt,500,100,SUP-007,2023-11-01
-PROD-009,The Great Gatsby,Books,Fiction,Scribner,89.00,44.00,0.18,19.8x12.9x1.5,,,Paperback,Classic American novel,120,20,SUP-008,1925-04-10
-PROD-010,Think Python,Books,Technical,O'Reilly,299.00,149.00,0.68,23.4x17.8x2.8,,,Paperback,Programming guide for Python,75,15,SUP-009,2023-07-01
+PROD-001,iPhone 15 Pro,電子機器,スマートフォン,Apple,7999.00,5999.00,0.187,146.6x70.6x8.25,ナチュラルチタニウム,128GB,チタニウム,A17 Proチップ搭載の最新iPhone,150,20,SUP-001,2023-09-15
+PROD-002,Samsung Galaxy S24,電子機器,スマートフォン,Samsung,6999.00,5249.00,0.168,147.0x70.6x7.6,ファントムブラック,256GB,アルミニウム,プレミアムAndroidスマートフォン,200,25,SUP-002,2024-01-01
+PROD-003,MacBook Air M3,電子機器,ノートパソコン,Apple,8999.00,6749.00,1.24,30.41x21.5x1.13,スペースグレイ,13インチ,アルミニウム,M3チップ搭載の軽量ノートパソコン,80,10,SUP-001,2024-03-01
+PROD-004,Dell XPS 13,電子機器,ノートパソコン,Dell,7599.00,5699.00,1.19,29.57x19.86x1.47,プラチナシルバー,13インチ,カーボンファイバー,超軽量Windowsノートパソコン,95,15,SUP-003,2023-10-01
+PROD-005,Nike Air Max 270,ファッション,シューズ,Nike,899.00,449.00,0.65,32x21x12,ブラック/ホワイト,27.0cm,合成素材,快適なランニングシューズ,300,50,SUP-004,2023-05-01
+PROD-006,Adidas Ultraboost 22,ファッション,シューズ,Adidas,1299.00,649.00,0.72,33x22x13,コアブラック,28.0cm,プライムニット,高性能ランニングシューズ,250,40,SUP-005,2023-08-01
+PROD-007,Levi's 501 ジーンズ,ファッション,衣類,Levi's,599.00,299.00,0.58,,,ブルー,32x34,デニム,クラシックストレートレッグジーンズ,180,30,SUP-006,2023-01-01
+PROD-008,ユニクロ ヒートテックTシャツ,ファッション,衣類,ユニクロ,129.00,64.00,0.15,,,ホワイト,L,コットンブレンド,保温性インナーシャツ,500,100,SUP-007,2023-11-01
+PROD-009,グレート・ギャツビー,書籍,小説,スクリブナー,89.00,44.00,0.18,19.8x12.9x1.5,,,文庫本,古典的アメリカ小説,120,20,SUP-008,1925-04-10
+PROD-010,Think Python,書籍,技術書,オライリー,299.00,149.00,0.68,23.4x17.8x2.8,,,ペーパーバック,Pythonプログラミングガイド,75,15,SUP-009,2023-07-01
 PROD-011,Instant Pot Duo 7-in-1,Home,Kitchen,Instant Pot,699.00,349.00,5.44,32.5x31.1x32.5,Stainless Steel,6 Quart,Stainless Steel,Multi-functional pressure cooker,60,10,SUP-010,2023-02-01
 PROD-012,Dyson V15 Detect,Home,Cleaning,Dyson,3999.00,2799.00,2.61,126.1x25.0x26.1,Yellow/Iron,Cordless,Plastic/Metal,Laser dust detection vacuum,35,5,SUP-011,2023-06-01
 PROD-013,IKEA BILLY Bookshelf,Home,Furniture,IKEA,399.00,199.00,23.5,40x28x202,White,80x28x202cm,Particleboard,Classic bookshelf design,45,8,SUP-012,2023-01-01

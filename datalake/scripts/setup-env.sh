@@ -248,7 +248,8 @@ EOF
 deploy_cloudformation_stack() {
     local stack_name="$1"
     local template_file="$2"
-    local parameters="$3"
+    shift 2  # Remove first two arguments
+    local parameters=("$@")  # Collect remaining arguments as array
     
     print_info "Deploying CloudFormation stack: $stack_name"
     
@@ -258,7 +259,7 @@ deploy_cloudformation_stack() {
         aws cloudformation update-stack \
             --stack-name "$stack_name" \
             --template-body "file://$template_file" \
-            --parameters "$parameters" \
+            --parameters "${parameters[@]}" \
             --capabilities CAPABILITY_NAMED_IAM \
             --region "$AWS_REGION" || true
         
@@ -270,7 +271,7 @@ deploy_cloudformation_stack() {
         aws cloudformation create-stack \
             --stack-name "$stack_name" \
             --template-body "file://$template_file" \
-            --parameters "$parameters" \
+            --parameters "${parameters[@]}" \
             --capabilities CAPABILITY_NAMED_IAM \
             --region "$AWS_REGION"
         
@@ -288,18 +289,24 @@ deploy_infrastructure() {
     
     # Deploy S3 storage layer
     local s3_stack_name="datalake-s3-storage-${ENVIRONMENT}"
-    local s3_parameters="ParameterKey=ProjectPrefix,ParameterValue=${PROJECT_PREFIX} ParameterKey=Environment,ParameterValue=${ENVIRONMENT}"
-    deploy_cloudformation_stack "$s3_stack_name" "templates/s3-storage-layer.yaml" "$s3_parameters"
+    deploy_cloudformation_stack "$s3_stack_name" "templates/s3-storage-layer.yaml" \
+        "ParameterKey=ProjectPrefix,ParameterValue=${PROJECT_PREFIX}" \
+        "ParameterKey=Environment,ParameterValue=${ENVIRONMENT}"
     
     # Deploy IAM roles
     local iam_stack_name="datalake-iam-roles-${ENVIRONMENT}"
-    local iam_parameters="ParameterKey=ProjectPrefix,ParameterValue=${PROJECT_PREFIX} ParameterKey=Environment,ParameterValue=${ENVIRONMENT} ParameterKey=S3StackName,ParameterValue=${s3_stack_name}"
-    deploy_cloudformation_stack "$iam_stack_name" "templates/iam-roles-policies.yaml" "$iam_parameters"
+    deploy_cloudformation_stack "$iam_stack_name" "templates/iam-roles-policies.yaml" \
+        "ParameterKey=ProjectPrefix,ParameterValue=${PROJECT_PREFIX}" \
+        "ParameterKey=Environment,ParameterValue=${ENVIRONMENT}" \
+        "ParameterKey=S3StackName,ParameterValue=${s3_stack_name}"
     
     # Deploy Lake Formation
     local lf_stack_name="datalake-lake-formation-${ENVIRONMENT}"
-    local lf_parameters="ParameterKey=ProjectPrefix,ParameterValue=${PROJECT_PREFIX} ParameterKey=Environment,ParameterValue=${ENVIRONMENT} ParameterKey=S3StackName,ParameterValue=${s3_stack_name} ParameterKey=IAMStackName,ParameterValue=${iam_stack_name}"
-    deploy_cloudformation_stack "$lf_stack_name" "templates/lake-formation.yaml" "$lf_parameters"
+    deploy_cloudformation_stack "$lf_stack_name" "templates/lake-formation.yaml" \
+        "ParameterKey=ProjectPrefix,ParameterValue=${PROJECT_PREFIX}" \
+        "ParameterKey=Environment,ParameterValue=${ENVIRONMENT}" \
+        "ParameterKey=S3StackName,ParameterValue=${s3_stack_name}" \
+        "ParameterKey=IAMStackName,ParameterValue=${iam_stack_name}"
     
     print_info "Infrastructure deployment completed"
 }
@@ -314,8 +321,10 @@ deploy_cost_monitoring() {
     print_step "Deploying cost monitoring..."
     
     local cost_stack_name="datalake-cost-monitoring-${ENVIRONMENT}"
-    local cost_parameters="ParameterKey=ProjectPrefix,ParameterValue=${PROJECT_PREFIX} ParameterKey=Environment,ParameterValue=${ENVIRONMENT} ParameterKey=AlertEmail,ParameterValue=${EMAIL_ADDRESS}"
-    deploy_cloudformation_stack "$cost_stack_name" "templates/cost-monitoring.yaml" "$cost_parameters"
+    deploy_cloudformation_stack "$cost_stack_name" "templates/cost-monitoring.yaml" \
+        "ParameterKey=ProjectPrefix,ParameterValue=${PROJECT_PREFIX}" \
+        "ParameterKey=Environment,ParameterValue=${ENVIRONMENT}" \
+        "ParameterKey=AlertEmail,ParameterValue=${EMAIL_ADDRESS}"
     
     print_info "Cost monitoring setup completed"
     print_warning "Please check your email and confirm the SNS subscription"

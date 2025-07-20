@@ -50,19 +50,18 @@ Resources:
           - "${DataEngineerRoleArn}"
           - DataEngineerRoleArn: 
               Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
-      DefaultDataLakeSettings:
-        CreateDatabaseDefaultPermissions:
-          - Principal: !Sub 
-            - "${DataEngineerRoleArn}"
-            - DataEngineerRoleArn: 
-                Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
-            Permissions: ["ALL"]
-        CreateTableDefaultPermissions:
-          - Principal: !Sub 
-            - "${DataEngineerRoleArn}"
-            - DataEngineerRoleArn: 
-                Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
-            Permissions: ["ALL"]
+      CreateDatabaseDefaultPermissions:
+        - Principal: !Sub 
+          - "${DataEngineerRoleArn}"
+          - DataEngineerRoleArn: 
+              Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+          Permissions: ["ALL"]
+      CreateTableDefaultPermissions:
+        - Principal: !Sub 
+          - "${DataEngineerRoleArn}"
+          - DataEngineerRoleArn: 
+              Fn::ImportValue: !Sub "${IAMStackName}-DataEngineerRoleArn"
+          Permissions: ["ALL"]
 
   # Register S3 Raw Data Location
   RawDataLocationResource:
@@ -136,7 +135,7 @@ Resources:
       Resource:
         DataLocationResource:
           CatalogId: !Ref AWS::AccountId
-          ResourceArn: !Sub 
+          S3Resource: !Sub 
             - "${RawBucketArn}"
             - RawBucketArn: 
                 Fn::ImportValue: !Sub "${S3StackName}-RawDataBucketArn"
@@ -155,7 +154,7 @@ Resources:
       Resource:
         DataLocationResource:
           CatalogId: !Ref AWS::AccountId
-          ResourceArn: !Sub 
+          S3Resource: !Sub 
             - "${CleanBucketArn}"
             - CleanBucketArn: 
                 Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucketArn"
@@ -174,7 +173,7 @@ Resources:
       Resource:
         DataLocationResource:
           CatalogId: !Ref AWS::AccountId
-          ResourceArn: !Sub 
+          S3Resource: !Sub 
             - "${AnalyticsBucketArn}"
             - AnalyticsBucketArn: 
                 Fn::ImportValue: !Sub "${S3StackName}-AnalyticsDataBucketArn"
@@ -227,7 +226,7 @@ Resources:
       Resource:
         DataLocationResource:
           CatalogId: !Ref AWS::AccountId
-          ResourceArn: !Sub 
+          S3Resource: !Sub 
             - "${RawBucketArn}"
             - RawBucketArn: 
                 Fn::ImportValue: !Sub "${S3StackName}-RawDataBucketArn"

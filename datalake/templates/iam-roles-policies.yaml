@@ -55,7 +55,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: [glue.amazonaws.com, emr.amazonaws.com, databrew.amazonaws.com]
+              Service: [glue.amazonaws.com, elasticmapreduce.amazonaws.com, databrew.amazonaws.com]
             Action: sts:AssumeRole
           - Effect: Allow
             Principal:
@@ -326,7 +326,7 @@ Resources:
                     - AnalyticsBucketArn: 
                         Fn::ImportValue: !Sub "${S3StackName}-AnalyticsDataBucketArn"
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonEMRforEC2Role
+        - arn:aws:iam::aws:policy/service-role/SageMakerStudioEMRInstanceRolePolicy
       Tags:
         - Key: Environment
           Value: !Ref Environment

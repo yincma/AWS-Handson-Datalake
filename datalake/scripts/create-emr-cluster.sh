@@ -214,8 +214,7 @@ create_emr_cluster() {
     # Build instance groups configuration
     local master_config='{
         "Name":"Master",
-        "Market":"ON_DEMAND",
-        "InstanceRole":"MASTER",
+        "InstanceGroupType":"MASTER",
         "InstanceType":"'$EMR_INSTANCE_TYPE'",
         "InstanceCount":1
     }'
@@ -224,9 +223,8 @@ create_emr_cluster() {
     if [[ "$USE_SPOT" == "true" ]]; then
         core_config='{
             "Name":"Core",
-            "Market":"SPOT",
+            "InstanceGroupType":"CORE",
             "BidPrice":"0.10",
-            "InstanceRole":"CORE",
             "InstanceType":"'$EMR_INSTANCE_TYPE'",
             "InstanceCount":'$(($EMR_INSTANCE_COUNT - 1))'
         }'
@@ -234,8 +232,7 @@ create_emr_cluster() {
     else
         core_config='{
             "Name":"Core",
-            "Market":"ON_DEMAND",
-            "InstanceRole":"CORE",
+            "InstanceGroupType":"CORE",
             "InstanceType":"'$EMR_INSTANCE_TYPE'",
             "InstanceCount":'$(($EMR_INSTANCE_COUNT - 1))'
         }'
@@ -244,7 +241,7 @@ create_emr_cluster() {
     # Build auto-termination configuration
     local auto_term_config=""
     if [[ "$AUTO_TERMINATE" == "true" ]]; then
-        auto_term_config="--auto-termination-policy '{\"IdleTimeout\":3600}'"
+        auto_term_config='--auto-termination-policy {"IdleTimeout":3600}'
         print_info "Auto-termination enabled (1 hour idle timeout)"
     fi
     
@@ -257,11 +254,9 @@ create_emr_cluster() {
         --ec2-attributes '{
             "KeyName":"'$KEY_NAME'",
             "SubnetId":"'$SUBNET_ID'",
-            "EmrManagedMasterSecurityGroup":"",
-            "EmrManagedSlaveSecurityGroup":"",
-            "ServiceAccessSecurityGroup":""
+            "InstanceProfile":"dl-handson-EMRInstanceProfile-dev"
         }' \
-        --service-role EMR_DefaultRole \
+        --service-role dl-handson-EMRServiceRole-dev \
         --log-uri "s3://$EMR_LOG_BUCKET/emr-logs/" \
         --enable-debugging \
         --configurations '[

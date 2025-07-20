@@ -178,7 +178,7 @@ Resources:
             Action: "s3:*"
             Resource:
               - !GetAtt RawDataBucket.Arn
-              - !Sub "${RawDataBucket}/*"
+              - !Sub "${RawDataBucket.Arn}/*"
             Condition:
               Bool:
                 "aws:SecureTransport": "false"
@@ -195,7 +195,7 @@ Resources:
             Action: "s3:*"
             Resource:
               - !GetAtt CleanDataBucket.Arn
-              - !Sub "${CleanDataBucket}/*"
+              - !Sub "${CleanDataBucket.Arn}/*"
             Condition:
               Bool:
                 "aws:SecureTransport": "false"
@@ -212,7 +212,7 @@ Resources:
             Action: "s3:*"
             Resource:
               - !GetAtt AnalyticsDataBucket.Arn
-              - !Sub "${AnalyticsDataBucket}/*"
+              - !Sub "${AnalyticsDataBucket.Arn}/*"
             Condition:
               Bool:
                 "aws:SecureTransport": "false"

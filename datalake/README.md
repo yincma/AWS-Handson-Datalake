@@ -5,186 +5,9 @@
 
 プロジェクトは設定駆動方式を採用し、完全なスクリプト、テンプレート、サンプルデータを提供することで、学習者が企業レベルのデータレイクのベストプラクティスを迅速にデプロイし理解できるようになると思います。
 
-## プロジェクト実行ガイド
-
-### 前提条件
-
-#### 🔧 必要な環境
-- **AWSアカウント**: 管理者権限を持つ有効なAWSアカウント
-- **AWS CLI**: インストール済みかつ認証情報が設定済み
-- **Python**: 3.7以上
-- **基礎知識**: AWS基本サービス、SQL、Pythonの基礎
-
-#### 📋 環境セットアップ
-```bash
-# AWS CLIのインストール（未インストールの場合）
-pip install awscli
-
-# AWS認証情報の設定
-aws configure
-```
-
-### クイック実行
-
-最も簡単な方法は、提供されている一括デプロイスクリプトを使用することです。
-
-#### 🚀 ワンクリックデプロイ
-```bash
-# 完全デプロイ（推奨）
-./scripts/setup-env.sh --email your-email@example.com
-
-# インフラのみデプロイ
-./scripts/setup-env.sh --mode infrastructure-only --email your-email@example.com
-
-# サンプルデータのみアップロード
-./scripts/setup-env.sh --mode sample-data-only
-```
-
-#### ⚡ 次のステップ
-デプロイ完了後：
-```bash
-# 1. Glueクローラーを開始してデータカタログを作成
-aws glue start-crawler --name dl-handson-raw-crawler --region us-east-1
-
-# 2. EMRクラスターを作成してデータ処理
-./scripts/create-emr-cluster.sh --key-name your-key --subnet-id your-subnet
-
-# 3. Sparkジョブを実行
-./scripts/submit_pyspark_job.sh
-
-# 4. Athenaでデータクエリ
-# AWS コンソールで scripts/athena_queries.sql のクエリを実行
-```
-
-### ステップバイステップ実行
-
-詳細な理解を求める場合は、以下の手順で段階的に実行できます。
-
-#### 📝 Phase 1: 環境準備
-```bash
-# 1. 設定ファイルをカスタマイズ
-cp configs/config.env configs/config.local.env
-# 必要に応じて regions, project名などを編集
-
-# 2. AWS認証情報を確認
-aws sts get-caller-identity
-
-# 3. 必要な権限をチェック
-aws iam list-roles --max-items 1
-```
-
-#### 🏗️ Phase 2: インフラデプロイ
-```bash
-# CloudFormationスタックを段階的にデプロイ
-./scripts/setup-env.sh --mode infrastructure-only --email your-email@example.com
-```
-
-これにより以下が作成されます：
-- **S3バケット**: Raw/Clean/Analytics + Athena結果用
-- **IAMロール**: DataEngineer、Analyst、GlueCrawler用
-- **Lake Formation**: データガバナンス設定
-- **Glueクローラー**: 自動スキーマ発見用
-- **コスト監視**: 予算アラートとSNS通知
-
-#### 📊 Phase 3: データ準備
-```bash
-# 1. サンプルデータをアップロード
-./scripts/setup-env.sh --mode sample-data-only
-
-# 2. データカタログを作成
-aws glue start-crawler --name dl-handson-raw-crawler --region us-east-1
-
-# 3. クローラー完了を確認
-aws glue get-crawler --name dl-handson-raw-crawler --region us-east-1
-```
-
-#### ⚡ Phase 4: データ処理
-```bash
-# 1. EMRクラスター作成
-./scripts/create-emr-cluster.sh \
-  --key-name your-ec2-key \
-  --subnet-id subnet-xxxxxxxxx \
-  --use-spot \
-  --auto-terminate
-
-# 2. PySpark分析ジョブ実行
-./scripts/submit_pyspark_job.sh
-
-# 3. ジョブ完了を確認
-aws emr list-clusters --region us-east-1
-```
-
-#### 🔍 Phase 5: データ分析
-```bash
-# Athenaワークベンチで以下を実行：
-# 1. データベースとテーブルを確認
-SHOW DATABASES;
-SHOW TABLES IN dl_handson_db;
-
-# 2. サンプルクエリ実行
-SELECT * FROM dl_handson_db.customers LIMIT 10;
-
-# 3. 高度な分析クエリ
-# scripts/athena_queries.sql のクエリを実行
-```
-
-### コスト管理
-
-#### 💰 コスト監視
-```bash
-# 現在のコストを確認
-./scripts/cost-optimization.sh
-
-# リソース使用状況をチェック
-aws s3 ls --summarize --human-readable --recursive s3://dl-handson-raw-dev/
-aws emr list-clusters --active --region us-east-1
-```
-
-#### 🧹 リソースクリーンアップ
-```bash
-# 実験完了後は必ずクリーンアップを実行
-./scripts/cleanup.sh
-
-# 手動確認（オプション）
-aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE
-aws s3 ls | grep dl-handson
-```
-
-#### 💡 コスト最適化のヒント
-- **EMRクラスター**: 使用後すぐに終了する（主要コスト要因）
-- **Spotインスタンス**: `--use-spot` フラグで60-70%コスト削減
-- **自動終了**: `--auto-terminate` で非アクティブ時自動終了
-- **リージョン選択**: us-east-1が最もコスト効率的
-
-#### 📊 予想コスト（4時間実験）
-- **オンデマンド**: 約$5-6
-- **Spotインスタンス**: 約$2-3
-- **主要コスト**: EMR (70-80%) > Glue > Athena > S3
-
-### ⚠️ 重要な注意事項
-
-1. **セキュリティ**: 実験用途のため、本番環境での直接使用は避けてください
-2. **権限**: 適切なIAM権限があることを確認してください
-3. **リージョン**: すべてのリソースを同一リージョンにデプロイしてください
-4. **クリーンアップ**: 実験完了後は必ずリソースを削除してください
-
-### 🔗 便利なリンク
-
-デプロイ完了後にアクセスできるAWSコンソール：
-- [S3管理コンソール](https://console.aws.amazon.com/s3/)
-- [Glue管理コンソール](https://console.aws.amazon.com/glue/)
-- [EMR管理コンソール](https://console.aws.amazon.com/elasticmapreduce/)
-- [Athena管理コンソール](https://console.aws.amazon.com/athena/)
-- [CloudFormation管理コンソール](https://console.aws.amazon.com/cloudformation/)
-- [コスト管理コンソール](https://console.aws.amazon.com/billing/)
 
 ## 目次
 - [プロジェクト概要](#プロジェクト概要)
-- [プロジェクト実行ガイド](#プロジェクト実行ガイド)
-  - [前提条件](#前提条件-1)
-  - [クイック実行](#クイック実行)
-  - [ステップバイステップ実行](#ステップバイステップ実行)
-  - [コスト管理](#コスト管理)
 - [技術アーキテクチャ](#技術アーキテクチャ)
 - [システムアーキテクチャ概要](#システムアーキテクチャ概要)
 - [権限とガバナンスモデル](#権限とガバナンスモデル)
@@ -194,6 +17,14 @@ aws s3 ls | grep dl-handson
 - [前提条件](#前提条件)
 - [予想時間とコスト](#予想時間とコスト)
 - [クイックスタート](#クイックスタート)
+- [ステップバイステップデプロイガイド](#ステップバイステップデプロイガイド)
+  - [デプロイ準備](#デプロイ準備)
+  - [基盤インフラストラクチャのデプロイ](#基盤インフラストラクチャのデプロイ)
+  - [データレイク階層の構築](#データレイク階層の構築)
+  - [データ処理環境の設定](#データ処理環境の設定)
+  - [分析環境の構成](#分析環境の構成)
+  - [検証とテスト](#検証とテスト)
+  - [クリーンアップと最適化](#クリーンアップと最適化)
 - [拡張学習](#拡張学習)
 - [ライセンス](#ライセンス)
 
@@ -421,6 +252,324 @@ Eコマースシナリオの完全なデータセットを提供：
    ```bash
    ./scripts/cleanup.sh
    ```
+
+### 🔗 便利なリンク
+
+デプロイ完了後にアクセスできるAWSコンソール：
+- [S3管理コンソール](https://console.aws.amazon.com/s3/)
+- [Glue管理コンソール](https://console.aws.amazon.com/glue/)
+- [EMR管理コンソール](https://console.aws.amazon.com/elasticmapreduce/)
+- [Athena管理コンソール](https://console.aws.amazon.com/athena/)
+- [CloudFormation管理コンソール](https://console.aws.amazon.com/cloudformation/)
+- [コスト管理コンソール](https://console.aws.amazon.com/billing/)
+
+## ステップバイステップデプロイガイド
+
+より詳細な制御と学習体験のため、以下のステップバイステップデプロイガイドを提供します。各ステップで実行内容を理解し、カスタマイズできます。
+
+### デプロイ準備
+
+#### 🔧 環境検証
+```bash
+# AWS認証情報を確認
+aws sts get-caller-identity
+
+# 必要な権限をテスト
+aws iam list-roles --max-items 1
+
+# リージョン設定を確認
+aws configure get region
+```
+
+#### 📝 設定ファイルのカスタマイズ
+```bash
+# ローカル設定ファイルを作成
+cp configs/config.env configs/config.local.env
+
+# 必要に応じて以下の設定を編集：
+# - AWS_REGION: デプロイ地域
+# - PROJECT_PREFIX: プロジェクト名プレフィックス
+# - ENVIRONMENT: 環境名（dev/staging/prod）
+# - EMR_INSTANCE_TYPE: EMRインスタンスタイプ
+vim configs/config.local.env
+```
+
+#### 🚨 コスト設定
+```bash
+# コスト監視用のメールアドレス設定
+export EMAIL_ADDRESS="your-email@example.com"
+
+# 予算と警告の閾値設定（オプション）
+# configs/config.local.env で DAILY_BUDGET を設定
+```
+
+### 基盤インフラストラクチャのデプロイ
+
+#### 1️⃣ S3ストレージ層の作成
+```bash
+# S3バケットとライフサイクルポリシーを作成
+aws cloudformation deploy \
+  --template-file templates/s3-storage-layer.yaml \
+  --stack-name datalake-s3-storage-dev \
+  --parameter-overrides \
+    ProjectPrefix=dl-handson \
+    Environment=dev \
+  --region us-east-1
+
+# 作成されたバケットを確認
+aws s3 ls | grep dl-handson
+```
+
+#### 2️⃣ IAMロールとポリシーの設定
+```bash
+# データレイク用のIAMロールを作成
+aws cloudformation deploy \
+  --template-file templates/iam-roles-policies.yaml \
+  --stack-name datalake-iam-roles-dev \
+  --parameter-overrides \
+    ProjectPrefix=dl-handson \
+    Environment=dev \
+    S3StackName=datalake-s3-storage-dev \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+
+# 作成されたロールを確認
+aws iam list-roles --query "Roles[?contains(RoleName, 'dl-handson')].RoleName"
+```
+
+#### 3️⃣ Lake Formationの初期化
+```bash
+# Lake Formationデータガバナンスを設定
+aws cloudformation deploy \
+  --template-file templates/lake-formation.yaml \
+  --stack-name datalake-lake-formation-dev \
+  --parameter-overrides \
+    ProjectPrefix=dl-handson \
+    Environment=dev \
+    S3StackName=datalake-s3-storage-dev \
+    IAMStackName=datalake-iam-roles-dev \
+  --region us-east-1
+
+# Glueデータベースを確認
+aws glue get-databases --region us-east-1
+```
+
+#### 4️⃣ コスト監視の設定（オプション）
+```bash
+# コストアラートとSNS通知を設定
+aws cloudformation deploy \
+  --template-file templates/cost-monitoring.yaml \
+  --stack-name datalake-cost-monitoring-dev \
+  --parameter-overrides \
+    ProjectPrefix=dl-handson \
+    Environment=dev \
+    AlertEmail=$EMAIL_ADDRESS \
+  --region us-east-1
+
+# SNS購読確認メールをチェック
+echo "メールボックスでSNS確認メールをチェックしてください"
+```
+
+### データレイク階層の構築
+
+#### 🥉 Raw層：データ取り込み
+```bash
+# サンプルデータをRaw層にアップロード
+aws s3 cp sample-data/customers.csv s3://dl-handson-raw-dev/ecommerce/customers/customers.csv
+aws s3 cp sample-data/orders.csv s3://dl-handson-raw-dev/ecommerce/orders/orders.csv  
+aws s3 cp sample-data/products.csv s3://dl-handson-raw-dev/ecommerce/products/products.csv
+aws s3 cp sample-data/order_items.csv s3://dl-handson-raw-dev/ecommerce/order_items/order_items.csv
+
+# アップロードを確認
+aws s3 ls s3://dl-handson-raw-dev/ecommerce/ --recursive
+```
+
+#### 🔍 スキーマ発見とカタログ化
+```bash
+# Glue Crawlerを起動してスキーマを自動発見
+aws glue start-crawler --name dl-handson-raw-crawler --region us-east-1
+
+# Crawler実行状況を監視
+watch -n 10 'aws glue get-crawler --name dl-handson-raw-crawler --region us-east-1 --query "Crawler.State"'
+
+# 発見されたテーブルを確認
+aws glue get-tables --database-name dl_handson_db --region us-east-1
+```
+
+#### 🥈 Clean層：データクリーニング（オプション）
+```bash
+# Glue DataBrewでデータクリーニングプロジェクトを作成
+aws databrew create-project \
+  --name dl-handson-cleaning-project \
+  --dataset-name customers-dataset \
+  --recipe-name cleaning-recipe \
+  --role-arn arn:aws:iam::ACCOUNT:role/dl-handson-GlueDataBrewRole-dev
+
+# データクリーニングジョブを実行
+aws databrew start-job-run --name cleaning-job
+```
+
+### データ処理環境の設定
+
+#### ⚡ EMRクラスターの作成
+```bash
+# EC2キーペアを取得（EMRアクセス用）
+aws ec2 describe-key-pairs --region us-east-1
+
+# サブネットIDを取得
+aws ec2 describe-subnets --region us-east-1 --query "Subnets[0].SubnetId"
+
+# EMRクラスターを作成（Spot instances使用でコスト削減）
+./scripts/create-emr-cluster.sh \
+  --key-name your-ec2-key-name \
+  --subnet-id subnet-xxxxxxxxx \
+  --use-spot \
+  --auto-terminate
+
+# クラスター状態を確認
+aws emr list-clusters --region us-east-1 --active
+```
+
+#### 🐍 PySparkデータ処理
+```bash
+# PySpark分析ジョブをEMRに提出
+./scripts/submit_pyspark_job.sh
+
+# ジョブ実行状況を監視
+aws emr list-steps --cluster-id j-XXXXXXXXX --region us-east-1
+
+# 処理結果をClean層で確認
+aws s3 ls s3://dl-handson-clean-dev/ --recursive
+```
+
+### 分析環境の構成
+
+#### 🔍 Athenaクエリ環境の設定
+```bash
+# Athenaワークグループを設定
+aws athena create-work-group \
+  --name dl-handson-workgroup \
+  --configuration ResultConfigurationUpdates={OutputLocation=s3://dl-handson-athena-results-dev/}
+
+# データベースとテーブルを確認
+aws athena start-query-execution \
+  --query-string "SHOW DATABASES;" \
+  --work-group dl-handson-workgroup \
+  --result-configuration OutputLocation=s3://dl-handson-athena-results-dev/
+```
+
+#### 📊 サンプルクエリの実行
+```sql
+-- Athenaコンソールまたは以下のコマンドで実行
+
+-- 1. 基本的なデータ確認
+SELECT * FROM dl_handson_db.customers LIMIT 10;
+
+-- 2. 注文統計分析
+SELECT 
+    EXTRACT(YEAR FROM order_date) as year,
+    EXTRACT(MONTH FROM order_date) as month,
+    COUNT(*) as order_count,
+    SUM(total_amount) as total_sales
+FROM dl_handson_db.orders 
+GROUP BY EXTRACT(YEAR FROM order_date), EXTRACT(MONTH FROM order_date)
+ORDER BY year, month;
+
+-- 3. 顧客別購入分析
+SELECT 
+    c.customer_name,
+    COUNT(o.order_id) as order_count,
+    SUM(o.total_amount) as total_spent
+FROM dl_handson_db.customers c
+JOIN dl_handson_db.orders o ON c.customer_id = o.customer_id
+GROUP BY c.customer_name
+ORDER BY total_spent DESC
+LIMIT 10;
+```
+
+### 検証とテスト
+
+#### ✅ システム全体の動作確認
+```bash
+# 1. 全てのCloudFormationスタックを確認
+aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE
+
+# 2. S3バケットとデータを確認
+aws s3 ls | grep dl-handson
+aws s3 ls s3://dl-handson-raw-dev/ecommerce/ --recursive
+
+# 3. Glueカタログを確認  
+aws glue get-databases --region us-east-1
+aws glue get-tables --database-name dl_handson_db --region us-east-1
+
+# 4. EMRクラスター状態を確認
+aws emr list-clusters --region us-east-1
+
+# 5. 簡単なAthenaクエリをテスト
+aws athena start-query-execution \
+  --query-string "SELECT COUNT(*) FROM dl_handson_db.customers;" \
+  --work-group primary \
+  --result-configuration OutputLocation=s3://dl-handson-athena-results-dev/
+```
+
+#### 🧪 データ品質検証
+```bash
+# データカウントの確認
+echo "=== データ品質チェック ==="
+aws athena start-query-execution \
+  --query-string "SELECT 'customers' as table_name, COUNT(*) as row_count FROM dl_handson_db.customers
+                  UNION ALL  
+                  SELECT 'orders' as table_name, COUNT(*) as row_count FROM dl_handson_db.orders
+                  UNION ALL
+                  SELECT 'products' as table_name, COUNT(*) as row_count FROM dl_handson_db.products;" \
+  --work-group primary \
+  --result-configuration OutputLocation=s3://dl-handson-athena-results-dev/
+```
+
+### クリーンアップと最適化
+
+#### 🧹 段階的リソースクリーンアップ
+```bash
+# 1. EMRクラスターを終了（最高優先度 - コスト削減）
+aws emr terminate-clusters --cluster-ids j-XXXXXXXXX
+
+# 2. 一時的なGlueジョブとCrawlerを停止
+aws glue stop-crawler --name dl-handson-raw-crawler
+aws databrew delete-job --name cleaning-job
+
+# 3. S3データを選択的に削除（必要に応じて）
+aws s3 rm s3://dl-handson-raw-dev/temp/ --recursive
+aws s3 rm s3://dl-handson-analytics-dev/temp/ --recursive
+
+# 4. 完全クリーンアップ（全てのリソースを削除）
+./scripts/cleanup.sh
+```
+
+#### 💰 コスト最適化の確認
+```bash
+# 現在のリソース使用状況を確認
+./scripts/cost-optimization.sh
+
+# 主要なコスト要因をチェック
+aws emr list-clusters --active --region us-east-1  # EMR確認
+aws s3api list-buckets --query "Buckets[?contains(Name, 'dl-handson')]"  # S3確認
+
+# AWS Cost Explorerでコストを監視
+echo "AWS Cost ExplorerでDaily cost trendを確認してください"
+echo "URL: https://console.aws.amazon.com/cost-management/home?region=us-east-1#/dashboard"
+```
+
+#### 📋 デプロイメント完了チェックリスト
+- [ ] 全てのCloudFormationスタックが `CREATE_COMPLETE` 状態
+- [ ] S3バケット（4個）が作成され、サンプルデータがアップロード済み  
+- [ ] IAMロール（7個）が正しく作成され、権限が設定済み
+- [ ] Glueデータベースとテーブルが作成され、スキーマが発見済み
+- [ ] EMRクラスターが作成され、PySparkジョブが実行済み（または終了済み）
+- [ ] Athenaでクエリが実行可能で、結果が取得できる
+- [ ] コスト監視アラートが設定され、メール通知が確認済み
+- [ ] クリーンアップスクリプトの動作が確認済み
+
+> **💡 Pro Tip**: 各ステップ完了後は必ずリソース状態を確認し、次のステップに進む前に問題がないことを確認してください。エラーが発生した場合は、CloudFormationコンソールやCloudWatchログで詳細を確認できます。
 
 ## 拡張学習
 
