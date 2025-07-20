@@ -18,13 +18,7 @@
 - [予想時間とコスト](#予想時間とコスト)
 - [クイックスタート](#クイックスタート)
 - [ステップバイステップデプロイガイド](#ステップバイステップデプロイガイド)
-  - [デプロイ準備](#デプロイ準備)
-  - [基盤インフラストラクチャのデプロイ](#基盤インフラストラクチャのデプロイ)
-  - [データレイク階層の構築](#データレイク階層の構築)
-  - [データ処理環境の設定](#データ処理環境の設定)
-  - [分析環境の構成](#分析環境の構成)
-  - [検証とテスト](#検証とテスト)
-  - [クリーンアップと最適化](#クリーンアップと最適化)
+- [クリーンアップガイド](#クリーンアップガイド)
 - [拡張学習](#拡張学習)
 - [ライセンス](#ライセンス)
 
@@ -117,29 +111,20 @@ Datalake/
 │   ├── setup-env.sh          # 基盤インフラストラクチャデプロイ
 │   ├── cleanup.sh            # リソース清理
 │   ├── create-emr-cluster.sh # EMRクラスター作成
-│   ├── cost-optimization.sh  # コスト最適化ツール
+│   ├── cost-optimization.sh  # コスト最適化
 │   ├── submit_pyspark_job.sh # Sparkジョブ送信
 │   ├── pyspark_analytics.py  # PySparkアナリティクススクリプト
-│   ├── athena_queries.sql    # Athena クエリサンプル
-│   └── utils/                # ユーティリティスクリプト
-│       ├── README.md         # ユーティリティ説明
-│       ├── check-resources.sh # リソース確認スクリプト
-│       ├── create_glue_tables.py # Glueテーブル作成
-│       ├── delete-s3-versions.py # S3バージョン削除ツール
-│       ├── export_env_template.sh # 環境変数テンプレート
-│       └── table_schemas.json # テーブルスキーマ定義
+│   └── athena_queries.sql    # Athena クエリサンプル
 ├── templates/                 # CloudFormation テンプレート
-│   ├── s3-storage-layer.yaml        # S3 ストレージ層
-│   ├── iam-roles-policies.yaml      # IAM ロール権限
-│   ├── lake-formation-simple.yaml   # Lake Formation 設定（簡易版）
-│   ├── lake-formation.yaml          # Lake Formation 設定（完全版）
-│   └── cost-monitoring.yaml         # コスト監視
+│   ├── s3-storage-layer.yaml      # S3 ストレージ層
+│   ├── iam-roles-policies.yaml    # IAM ロール権限
+│   ├── lake-formation.yaml        # Lake Formation 設定
+│   └── cost-monitoring.yaml       # コスト監視
 └── sample-data/               # サンプルデータセット
-    ├── README.md             # データセット説明書
-    ├── customers.csv         # 顧客データ
-    ├── orders.csv           # 注文データ
-    ├── order_items.csv      # 注文明細
-    └── products.csv         # 製品データ
+    ├── customers.csv          # 顧客データ
+    ├── orders.csv            # 注文データ
+    ├── order_items.csv       # 注文明細
+    └── products.csv          # 製品データ
 ```
 
 ## コア機能
@@ -163,10 +148,7 @@ Datalake/
 - **列レベル権限**: Lake Formationの細かいデータアクセス制御
 
 ### 4. ワンクリックデプロイメント
-- **統合デプロイ**: `deploy-all.sh`によるワンクリック完全デプロイ
-- **段階的デプロイ**: 基盤インフラ → EMRクラスター → データ分析の柔軟な組み合わせ
-- **オプション選択**: `--with-emr`、`--with-analytics`による必要な機能のみデプロイ
-- **自動検証**: デプロイ後の各コンポーネント動作確認と詳細レポート生成
+- **統合デプロイ**: `./scripts/deploy-all.sh --with-emr --with-analytics`によるワンクリック完全デプロイ`
 
 ### 5. コスト最適化
 - **完全自動クリーンアップ**: 深層クリーンアップ機能でS3バージョン化オブジェクトも完全削除
@@ -633,6 +615,8 @@ echo "URL: https://console.aws.amazon.com/cost-management/home?region=us-east-1#
 
 > **💡 Pro Tip**: 各ステップ完了後は必ずリソース状態を確認し、次のステップに進む前に問題がないことを確認してください。エラーが発生した場合は、CloudFormationコンソールやCloudWatchログで詳細を確認できます。
 
+
+
 ## 拡張学習
 
 ### 上級トピック
@@ -647,13 +631,9 @@ echo "URL: https://console.aws.amazon.com/cost-management/home?region=us-east-1#
 - 自動化データ品質チェック
 - 災害復旧とバックアップ戦略
 
-## ライセンス
+## クリーンアップガイド
 
-本プロジェクトは教育・学習目的のみに使用してください。本番環境での直接使用は推奨されません。実際の使用前に十分なセキュリティ評価とテストを実施してください。
-
-### クリーンアップガイド
-
-#### 🧹 標準クリーンアップ手順（推奨）
+### 🧹 標準クリーンアップ手順（推奨）
 
 ```bash
 # リソース状態の事前確認
@@ -663,7 +643,7 @@ echo "URL: https://console.aws.amazon.com/cost-management/home?region=us-east-1#
 ./scripts/cleanup.sh --force --deep-clean --retry-failed
 ```
 
-#### クリーンアップオプション説明
+### クリーンアップオプション説明
 
 | オプション | 説明 | 使用場面 |
 |-----------|------|----------|
@@ -672,7 +652,7 @@ echo "URL: https://console.aws.amazon.com/cost-management/home?region=us-east-1#
 | `--retry-failed` | DELETE_FAILEDスタックを再試行 | CloudFormationスタック削除失敗時 |
 | `--delete-logs` | CloudWatchログも削除 | ログを保持する必要がない場合 |
 
-#### 🔍 クリーンアップ検証
+### 🔍 クリーンアップ検証
 
 ```bash
 # クリーンアップ後の確認
@@ -690,3 +670,7 @@ aws glue get-databases  # Glueリソース確認
 > - 実験完了後は必ず標準クリーンアップ（`--deep-clean --retry-failed`付き）を実行してください
 > - S3バージョニングが有効な場合、通常のクリーンアップでは全てのオブジェクトが削除されない可能性があります
 > - Lake Formationリソースが原因でスタック削除が失敗する場合は、`--retry-failed`オプションを使用してください
+
+## ライセンス
+
+本プロジェクトは教育・学習目的のみに使用してください。本番環境での直接使用は推奨されません。実際の使用前に十分なセキュリティ評価とテストを実施してください。
