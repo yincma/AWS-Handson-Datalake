@@ -65,7 +65,7 @@ flowchart TD
     Athena --> Results[📋 クエリ結果]
     
     %% Business Intelligence
-    Results --> BI[📈 BI ダッシュボード<br/>QuickSight(今回未作成)]
+    Results --> BI[📈 BI ダッシュボード<br/>QuickSight今回未作成]
 
     %% Governance Layer
     subgraph Governance[🛡️ データガバナンス]
