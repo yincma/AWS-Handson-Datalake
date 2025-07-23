@@ -221,8 +221,8 @@ echo "ENVIRONMENT=$ENVIRONMENT"        # dev
 # EMRクラスターと分析ジョブを含む完全デプロイ
 ./scripts/cli/datalake deploy --full
 
-# または従来のスクリプト
-./scripts/deploy-all.sh --with-emr --with-analytics
+# Legacy script (fallback only)
+# ./scripts/deploy-all.sh --with-emr --with-analytics
 ```
 
 ### 5. システム確認
