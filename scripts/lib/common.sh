@@ -1,16 +1,16 @@
 #!/bin/bash
 
 # =============================================================================
-# AWS 数据湖项目通用工具库
-# 版本: 2.0.0
-# 描述: 提供统一的日志、错误处理、重试机制和通用工具函数
+# AWS Data Lake Project Common Utility Library
+# Version: 2.0.0
+# Description: Provides unified logging, error handling, retry mechanism and common utility functions
 # =============================================================================
 
 set -eu
 # pipefailはBash 3.x互換性のため無効化
 
-# 全局变量
-# 重複読み込み防止
+# Global variables
+# Prevent duplicate loading
 if [[ -z "${COMMON_LIB_VERSION:-}" ]]; then
     readonly COMMON_LIB_VERSION="2.0.0"
 fi
@@ -19,7 +19,7 @@ LOG_FORMAT="${LOG_FORMAT:-console}"
 MAX_RETRIES="${MAX_RETRIES:-3}"
 RETRY_DELAY="${RETRY_DELAY:-2}"
 
-# 颜色定义 - 重複読み込み防止
+# Color definitions - prevent duplicate loading
 if [[ -z "${RED:-}" ]]; then
     readonly RED='\033[0;31m'
     readonly GREEN='\033[0;32m'
@@ -31,7 +31,7 @@ if [[ -z "${RED:-}" ]]; then
     readonly NC='\033[0m' # No Color
 fi
 
-# 日志级别枚举 - 重複読み込み防止  
+# Log level enumeration - prevent duplicate loading  
 if [[ -z "${LOG_LEVEL_DEBUG:-}" ]]; then
     readonly LOG_LEVEL_DEBUG=10
     readonly LOG_LEVEL_INFO=20
@@ -41,7 +41,7 @@ if [[ -z "${LOG_LEVEL_DEBUG:-}" ]]; then
 fi
 
 # =============================================================================
-# 日志系统
+# Logging System
 # =============================================================================
 
 get_log_level_num() {
@@ -100,12 +100,12 @@ log_message() {
             echo "$formatted_message" >&2
         fi
         
-        # 同时写入日志文件（如果设置了LOG_FILE）
+        # Also write to log file (if LOG_FILE is set)
         if [[ -n "${LOG_FILE:-}" ]]; then
             echo "$formatted_message" >> "$LOG_FILE"
         fi
         
-        # 发送到syslog
+        # Send to syslog
         logger -t "datalake" "$level: $message" 2>/dev/null || true
     fi
 }
@@ -126,7 +126,7 @@ print_success() { log_message "INFO" "✅ $1" "$GREEN"; }
 print_failure() { log_message "ERROR" "❌ $1" "$RED"; }
 
 # =============================================================================
-# 错误处理系统
+# Error Handling System
 # =============================================================================
 
 # Bash 3.x互換性のため連想配列を無効化
@@ -137,35 +137,35 @@ cleanup_functions=""
 
 register_error_handler() {
     # Bash 3.x互換性のため無効化
-    print_debug "エラーハンドラー登録は無効化されています (Bash 3.x互換性)"
+    print_debug "Error handler registration disabled (Bash 3.x compatibility)"
 }
 
 register_cleanup_function() {
     # Bash 3.x互換性のため無効化
-    print_debug "クリーンアップ関数登録は無効化されています (Bash 3.x互換性)"
+    print_debug "Cleanup function registration disabled (Bash 3.x compatibility)"
 }
 
 cleanup_on_error() {
     # Bash 3.x互換性のため無効化
-    print_warning "クリーンアップ機能は無効化されています (Bash 3.x互換性)"
+    print_warning "Cleanup functionality disabled (Bash 3.x compatibility)"
 }
 
 handle_error() {
     local exit_code="${1:-1}"
-    local error_message="${2:-未知错误}"
+    local error_message="${2:-Unknown error}"
     local context="${3:-}"
     
     print_error "$error_message"
     
     if [[ -n "$context" ]]; then
-        print_debug "错误上下文: $context"
+        print_debug "Error context: $context"
     fi
     
-    # 查找匹配的错误处理器
+    # Find matching error handler
     for pattern in "${!error_handlers[@]}"; do
         if [[ "$error_message" =~ $pattern ]]; then
             local handler="${error_handlers[$pattern]}"
-            print_debug "执行错误处理器: $handler"
+            print_debug "Executing error handler: $handler"
             if declare -F "$handler" >/dev/null; then
                 "$handler" "$error_message" "$context"
             fi
@@ -177,12 +177,12 @@ handle_error() {
 }
 
 setup_error_trap() {
-    trap 'handle_error $? "脚本执行失败" "Line: $LINENO, Command: $BASH_COMMAND"' ERR
+    trap 'handle_error $? "Script execution failed" "Line: $LINENO, Command: $BASH_COMMAND"' ERR
     trap 'cleanup_on_error; exit 130' INT TERM
 }
 
 # =============================================================================
-# 重试机制
+# Retry Mechanism
 # =============================================================================
 
 retry_with_backoff() {
@@ -195,11 +195,11 @@ retry_with_backoff() {
     local delay="$initial_delay"
     
     while [[ $attempt -le $max_attempts ]]; do
-        print_debug "尝试 $attempt/$max_attempts: $*"
+        print_debug "Attempt $attempt/$max_attempts: $*"
         
         if "$@"; then
             if [[ $attempt -gt 1 ]]; then
-                print_success "命令在第 $attempt 次尝试中成功执行"
+                print_success "Command succeeded on attempt $attempt"
             fi
             return 0
         fi
@@ -207,11 +207,11 @@ retry_with_backoff() {
         local exit_code=$?
         
         if [[ $attempt -lt $max_attempts ]]; then
-            print_warning "尝试 $attempt 失败（退出代码: $exit_code），${delay}秒后重试..."
+            print_warning "Attempt $attempt failed (exit code: $exit_code), retrying in ${delay}s..."
             sleep "$delay"
             delay=$((delay * backoff_factor))
         else
-            print_error "所有 $max_attempts 次尝试都失败了"
+            print_error "All $max_attempts attempts failed"
         fi
         
         attempt=$((attempt + 1))
@@ -220,14 +220,14 @@ retry_with_backoff() {
     return $exit_code
 }
 
-# 特定于AWS的重试逻辑
+# AWS-specific retry logic
 retry_aws_command() {
-    # AWS命令专用重试函数，使用固定的重试参数
+    # AWS command specific retry function with fixed retry parameters
     retry_with_backoff 5 2 2 "$@"
 }
 
 # =============================================================================
-# 系统验证和前置检查
+# System Validation and Prerequisite Checks
 # =============================================================================
 
 check_command() {
@@ -235,40 +235,40 @@ check_command() {
     local install_hint="${2:-}"
     
     if ! command -v "$cmd" &> /dev/null; then
-        local error_msg="命令 '$cmd' 未找到"
+        local error_msg="Command '$cmd' not found"
         if [[ -n "$install_hint" ]]; then
             error_msg="$error_msg. $install_hint"
         fi
         handle_error 1 "$error_msg"
     fi
     
-    print_debug "✓ 命令 '$cmd' 可用"
+    print_debug "✓ Command '$cmd' is available"
 }
 
 check_aws_cli_version() {
-    check_command "aws" "请安装 AWS CLI: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
+    check_command "aws" "Please install AWS CLI: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
     
     local version
     version=$(aws --version 2>&1 | cut -d/ -f2 | cut -d' ' -f1)
     local major_version=${version%%.*}
     
     if [[ $major_version -lt 1 ]]; then
-        handle_error 1 "需要 AWS CLI v1.18+ 或 v2+，当前版本: $version"
+        handle_error 1 "AWS CLI v1.18+ or v2+ required, current version: $version"
     fi
     
     if [[ $major_version -eq 1 ]]; then
-        print_warning "AWS CLI v1 ($version) を使用中。v2への更新を推奨します"
-        print_info "更新: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
+        print_warning "Using AWS CLI v1 ($version). Upgrade to v2 recommended"
+        print_info "Update: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
     fi
     
-    print_debug "✓ AWS CLI 版本: $version"
+    print_debug "✓ AWS CLI version: $version"
 }
 
 validate_aws_credentials() {
-    print_debug "验证 AWS 凭证..."
+    print_debug "Validating AWS credentials..."
     
     if ! aws sts get-caller-identity &>/dev/null; then
-        handle_error 1 "AWS 凭证无效或未配置。请运行 'aws configure' 或设置相关环境变量"
+        handle_error 1 "AWS credentials invalid or not configured. Please run 'aws configure' or set appropriate environment variables"
     fi
     
     local account_id region
@@ -276,12 +276,12 @@ validate_aws_credentials() {
     region=$(aws configure get region || echo "${AWS_REGION:-}")
     
     if [[ -z "$region" ]]; then
-        handle_error 1 "AWS 区域未设置。请设置 AWS_REGION 环境变量或运行 'aws configure'"
+        handle_error 1 "AWS region not set. Please set AWS_REGION environment variable or run 'aws configure'"
     fi
     
-    print_debug "✓ AWS 账户: $account_id, 区域: $region"
+    print_debug "✓ AWS Account: $account_id, Region: $region"
     
-    # 导出供其他脚本使用
+    # Export for use by other scripts
     export AWS_ACCOUNT_ID="$account_id"
     export AWS_REGION="$region"
 }
@@ -294,71 +294,71 @@ verify_required_env_vars() {
         if [[ -z "${!var:-}" ]]; then
             missing_vars+=("$var")
         else
-            print_debug "✓ 环境变量 $var 已设置"
+            print_debug "✓ Environment variable $var is set"
         fi
     done
     
     if [[ ${#missing_vars[@]} -gt 0 ]]; then
-        local error_msg="缺少必需的环境变量: $(IFS=', '; echo "${missing_vars[*]}")"
+        local error_msg="Missing required environment variables: $(IFS=', '; echo "${missing_vars[*]}")"
         handle_error 1 "$error_msg"
     fi
 }
 
 validate_prerequisites() {
-    print_step "验证系统前置条件..."
+    print_step "Validating system prerequisites..."
     
-    # 检查必需的命令
-    check_command "jq" "请安装 jq: sudo apt-get install jq 或 brew install jq"
+    # Check required commands
+    check_command "jq" "Please install jq: sudo apt-get install jq or brew install jq"
     check_command "curl"
     check_aws_cli_version
     
-    # 验证 AWS 凭证
+    # Validate AWS credentials
     validate_aws_credentials
     
-    # 检查必需的环境变量
+    # Check required environment variables
     verify_required_env_vars "PROJECT_PREFIX" "ENVIRONMENT"
     
-    print_success "所有前置条件验证通过"
+    print_success "All prerequisites validated successfully"
 }
 
 # =============================================================================
-# 配置管理
+# Configuration Management
 # =============================================================================
 
 load_config() {
     local config_file="${1:-configs/config.env}"
     local local_config="${config_file%.*}.local.env"
     
-    print_debug "加载配置文件..."
+    print_debug "Loading configuration files..."
     
-    # 加载主配置文件
+    # Load main configuration file
     if [[ -f "$config_file" ]]; then
-        print_debug "加载主配置: $config_file"
+        print_debug "Loading main config: $config_file"
         set -a
         source "$config_file"
         set +a
     else
-        print_warning "主配置文件不存在: $config_file"
+        print_warning "Main config file does not exist: $config_file"
     fi
     
-    # 加载本地覆盖配置
+    # Load local override config
     if [[ -f "$local_config" ]]; then
-        print_debug "加载本地配置: $local_config"
+        print_debug "Loading local config: $local_config"
         set -a
         source "$local_config"
         set +a
     fi
     
-    # 设置默认值
+    # Set default values
     export PROJECT_PREFIX="${PROJECT_PREFIX:-dl-handson}"
     export ENVIRONMENT="${ENVIRONMENT:-dev}"
     export AWS_REGION="${AWS_REGION:-us-east-1}"
     
-    print_debug "✓ 配置加载完成"
+    print_debug "✓ Configuration loaded successfully"
 }
 
 # =============================================================================
-# AWS 资源名称生成
+# AWS Resource Name Generation
 # =============================================================================
 
 generate_resource_name() {
@@ -387,7 +387,7 @@ get_stack_name() {
 }
 
 # =============================================================================
-# 进度和状态管理
+# Progress and Status Management
 # =============================================================================
 
 show_progress() {
@@ -410,7 +410,7 @@ finish_progress() {
 }
 
 # =============================================================================
-# AWS 资源检查
+# AWS Resource Checks
 # =============================================================================
 
 check_stack_exists() {
@@ -432,7 +432,7 @@ get_stack_status() {
 }
 
 # =============================================================================
-# 实用工具函数
+# Utility Functions
 # =============================================================================
 
 confirm_action() {
@@ -457,11 +457,11 @@ confirm_action() {
 
 wait_for_stack_completion() {
     local stack_name="$1"
-    local timeout="${2:-1800}" # 30分钟默认超时
+    local timeout="${2:-1800}" # 30 minutes default timeout
     local start_time
     start_time=$(date +%s)
     
-    print_info "等待堆栈操作完成: $stack_name"
+    print_info "Waiting for stack operation to complete: $stack_name"
     
     while true; do
         local status
@@ -469,11 +469,11 @@ wait_for_stack_completion() {
         
         case "$status" in
             *COMPLETE)
-                print_success "堆栈操作成功完成: $stack_name"
+                print_success "Stack operation completed successfully: $stack_name"
                 return 0
                 ;;
             *FAILED*|*ROLLBACK*)
-                print_error "堆栈操作失败: $stack_name (状态: $status)"
+                print_error "Stack operation failed: $stack_name (status: $status)"
                 return 1
                 ;;
             *IN_PROGRESS)
@@ -482,15 +482,15 @@ wait_for_stack_completion() {
                 local elapsed=$((current_time - start_time))
                 
                 if [[ $elapsed -gt $timeout ]]; then
-                    print_error "等待堆栈操作超时: $stack_name"
+                    print_error "Stack operation timed out: $stack_name"
                     return 1
                 fi
                 
-                print_debug "堆栈状态: $status (已等待 ${elapsed}s)"
+                print_debug "Stack status: $status (waited ${elapsed}s)"
                 sleep 10
                 ;;
             DOES_NOT_EXIST)
-                print_error "堆栈不存在: $stack_name"
+                print_error "Stack does not exist: $stack_name"
                 return 1
                 ;;
         esac
@@ -498,7 +498,7 @@ wait_for_stack_completion() {
 }
 
 # =============================================================================
-# 性能和监控
+# Performance and Monitoring
 # =============================================================================
 
 start_timer() {
@@ -514,7 +514,7 @@ end_timer() {
     start_time=$(eval "echo \$timer_${timer_name}_start")
     
     if [[ -z "$start_time" ]]; then
-        print_warning "计时器 '$timer_name' 未启动"
+        print_warning "Timer '$timer_name' not started"
         return 1
     fi
     
@@ -522,39 +522,39 @@ end_timer() {
     end_time=$(date +%s)
     local duration=$((end_time - start_time))
     
-    print_info "⏱️  操作 '$timer_name' 耗时: ${duration}s"
+    print_info "⏱️  Operation '$timer_name' took: ${duration}s"
     
-    # 清理计时器変数 - Bash 3.x互換性のため無効化
+    # Clean up timer variable - disabled for Bash 3.x compatibility
     # unset "$start_var"
 }
 
 # =============================================================================
-# 初始化
+# Initialization
 # =============================================================================
 
 init_common_lib() {
-    print_debug "初始化通用工具库 v$COMMON_LIB_VERSION"
+    print_debug "Initializing common utility library v$COMMON_LIB_VERSION"
     
-    # 设置错误捕获
+    # Set up error trapping
     setup_error_trap
     
-    # 检查并安装 bc（用于计算）
+    # Check and install bc (for calculations)
     if ! command -v bc &>/dev/null && [[ "$OSTYPE" == "darwin"* ]]; then
-        print_warning "在 macOS 上未找到 bc 命令，某些计算功能可能不可用"
+        print_warning "bc command not found on macOS, some calculation features may not be available"
     fi
     
-    print_debug "✓ 通用工具库初始化完成"
+    print_debug "✓ Common utility library initialization complete"
 }
 
-# 自动初始化
+# Auto-initialize
 init_common_lib
 
 # =============================================================================
-# 导出公共函数
+# Export Public Functions
 # =============================================================================
 
-# 这里可以定义哪些函数应该被导出给其他脚本使用
-# 注意：在 bash 中，所有函数默认都是"全局"的，这里主要用于文档目的
+# Define which functions should be exported for use by other scripts
+# Note: In bash, all functions are "global" by default, this is mainly for documentation purposes
 export -f print_debug print_info print_warning print_error print_critical
 export -f print_step print_success print_failure
 export -f handle_error retry_with_backoff retry_aws_command
