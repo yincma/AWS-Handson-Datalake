@@ -113,69 +113,75 @@ aws configure
 
 ### 1. Basic Deployment (Infrastructure Only)
 ```bash
-# Execute basic deployment
-./scripts/datalake deploy
+# Execute basic deployment using unified CLI
+./scripts/cli/datalake deploy
 
 # Check deployment status
-./scripts/datalake status
+./scripts/cli/datalake status
 ```
 
 ### 2. Full Deployment (Including Analytics)
 ```bash
 # Full deployment including EMR cluster and analytics jobs
-./scripts/datalake deploy --with-emr --with-analytics
+./scripts/cli/datalake deploy --full
 
 # Monitor deployment progress
-./scripts/datalake monitor
+./scripts/cli/datalake monitoring
 ```
 
 ### 3. Cleanup Resources
 ```bash
 # Complete cleanup of all resources
-./scripts/datalake destroy --force --deep-clean
+./scripts/cli/datalake destroy --force --deep-clean
 ```
 
 ## Unified CLI Usage Guide
 
-The new unified CLI provides centralized management for all data lake operations:
+**🆕 NEW in v2.1**: The project now includes a unified CLI system (`./scripts/cli/datalake`) that provides centralized management for all data lake operations. This is the **recommended** way to manage your data lake:
+
+### Why Use the New CLI?
+- **Simplified Commands**: Single entry point for all operations
+- **Modular Management**: Deploy and manage individual components
+- **Better Error Handling**: Integrated retry logic and validation
+- **Consistent Interface**: Unified command structure across all operations
 
 ### Basic Commands
 ```bash
 # Display help
-./scripts/datalake help
+./scripts/cli/datalake help
 
 # Check system status
-./scripts/datalake status
+./scripts/cli/datalake status
 
 # View configuration
-./scripts/datalake config
+./scripts/cli/datalake config
 ```
 
 ### Deployment Management
 ```bash
 # Basic deployment
-./scripts/datalake deploy
+./scripts/cli/datalake deploy
 
-# Deployment with specific modules
-./scripts/datalake deploy --modules s3,iam,glue
+# Individual module deployment
+./scripts/cli/datalake module deploy s3_storage
 
 # Deployment with EMR
-./scripts/datalake deploy --with-emr
+./scripts/cli/datalake deploy --emr
 
 # Execute analytics job
-./scripts/datalake analytics run
+./scripts/cli/datalake analytics
 ```
 
 ### Monitoring and Management
 ```bash
 # Real-time monitoring
-./scripts/datalake monitor
+./scripts/cli/datalake monitoring
 
 # Cost report
-./scripts/datalake cost-report
+./scripts/cli/datalake costs
 
 # Resource validation
-./scripts/datalake validate
+./scripts/cli/datalake validate
 ```
 
 ## System Configuration
@@ -245,37 +251,37 @@ source configs/env-vars.sh
 ### 1. Daily Operations
 ```bash
 # Check system health
-./scripts/datalake status --detailed
+./scripts/cli/datalake status
 
 # View recent activities
-./scripts/datalake monitor --last-24h
+./scripts/cli/datalake logs --hours 24
 
-# Run scheduled analytics
-./scripts/datalake analytics run --scheduled
+# Run analytics job
+./scripts/cli/datalake analytics
 ```
 
 ### 2. Cost Optimization
 ```bash
 # Generate cost report
-./scripts/datalake cost-report --last-30-days
+./scripts/cli/datalake costs
 
-# Identify optimization opportunities
-./scripts/datalake optimize suggest
+# Run cost monitoring script
+./scripts/cost-optimization.sh
 
-# Apply optimizations
-./scripts/datalake optimize apply
+# Deploy cost monitoring module
+./scripts/cli/datalake module deploy cost_monitoring
 ```
 
 ### 3. Security Management
 ```bash
-# Security audit
-./scripts/datalake security audit
+# Security analysis
+./scripts/cli/datalake security
 
-# Update permissions
-./scripts/datalake security update-permissions
+# Validate configuration
+./scripts/cli/datalake validate
 
-# Rotate credentials
-./scripts/datalake security rotate-keys
+# Check CloudTrail logs
+./scripts/cli/datalake logs
 ```
 
 ## Troubleshooting
@@ -284,29 +290,29 @@ source configs/env-vars.sh
 
 1. **Deployment Failures**
    ```bash
-   # Check CloudFormation stack status
-   ./scripts/datalake diagnose stacks
+   # Check system status
+   ./scripts/cli/datalake status
    
    # Retry failed deployments
-   ./scripts/datalake deploy --retry-failed
+   ./scripts/cli/datalake deploy
    ```
 
 2. **Permission Issues**
    ```bash
-   # Verify IAM permissions
-   ./scripts/datalake validate permissions
+   # Verify configuration
+   ./scripts/cli/datalake validate
    
-   # Fix Lake Formation permissions
-   ./scripts/datalake fix-permissions
+   # Redeploy IAM roles
+   ./scripts/cli/datalake module deploy iam_roles
    ```
 
 3. **EMR Cluster Issues**
    ```bash
-   # Check cluster status
-   ./scripts/datalake emr status
+   # Check EMR cluster status
+   ./scripts/cli/datalake module status emr_cluster
    
-   # View cluster logs
-   ./scripts/datalake emr logs
+   # Redeploy EMR cluster
+   ./scripts/cli/datalake module deploy emr_cluster
    ```
 
 ### Debug Mode
@@ -314,15 +320,17 @@ source configs/env-vars.sh
 # Enable debug logging
 export LOG_LEVEL=DEBUG
 
-# Run with verbose output
-./scripts/datalake deploy -v
+# Run deployment
+./scripts/cli/datalake deploy
 ```
 
 ## Project Structure
 ```
 aws-datalake-handson/
 ├── scripts/              # Deployment and management scripts
-│   ├── datalake         # Unified CLI entry point
+│   ├── cli/
+│   │   └── datalake     # 🆕 Unified CLI entry point (RECOMMENDED)
+│   ├── deploy-all.sh    # Legacy deployment script (fallback only)
 │   ├── core/           # Core modules
 │   ├── lib/            # Shared libraries
 │   └── utils/          # Utility scripts
@@ -330,6 +338,21 @@ aws-datalake-handson/
 ├── configs/            # Configuration files
 ├── sample-data/        # Sample datasets
 └── docs/              # Documentation
+```
+
+### 🔄 Migration from Legacy Scripts
+If you're upgrading from an older version:
+
+**Old Way** (v1.x):
+```bash
+./scripts/deploy-all.sh --with-emr --with-analytics
+./scripts/cleanup.sh --force
+```
+
+**New Way** (v2.1+, **Recommended**):
+```bash
+./scripts/cli/datalake deploy --full
+./scripts/cli/datalake destroy --force --deep-clean
 ```
 
 ## Best Practices
