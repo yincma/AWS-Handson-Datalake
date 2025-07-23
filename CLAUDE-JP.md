@@ -25,7 +25,12 @@
 # 🆕 推奨: 統一CLIを使用
 ./scripts/cli/datalake status              # システム状態確認
 ./scripts/cli/datalake costs               # コスト分析
-./scripts/cli/datalake destroy --force --deep-clean  # 完全クリーンアップ
+./scripts/cli/datalake destroy             # 通常リソース削除
+./scripts/cli/datalake destroy --force --deep-clean  # 完全クリーンアップ（推奨）
+
+# 個別モジュールのクリーンアップ
+./scripts/cli/datalake module cleanup emr_cluster    # EMRクラスターのみ削除
+./scripts/cli/datalake module cleanup s3_storage     # S3ストレージのみ削除
 
 # 従来のスクリプト（フォールバックのみ）
 # ./scripts/cost-optimization.sh

@@ -131,8 +131,14 @@ aws configure
 
 ### 3. Cleanup Resources
 ```bash
-# Complete cleanup of all resources
+# Basic resource cleanup
+./scripts/cli/datalake destroy
+
+# Complete cleanup of all resources (recommended)
 ./scripts/cli/datalake destroy --force --deep-clean
+
+# Individual module cleanup
+./scripts/cli/datalake module cleanup emr_cluster
 ```
 
 ## Unified CLI Usage Guide
@@ -345,14 +351,22 @@ If you're upgrading from an older version:
 
 **Old Way** (v1.x):
 ```bash
+# Deployment
 ./scripts/deploy-all.sh --with-emr --with-analytics
-./scripts/cleanup.sh --force
+# Cleanup
+./scripts/cleanup.sh --force --deep-clean --retry-failed
+# Cost monitoring
+./scripts/cost-optimization.sh
 ```
 
 **New Way** (v2.1+, **Recommended**):
 ```bash
+# Deployment
 ./scripts/cli/datalake deploy --full
+# Cleanup
 ./scripts/cli/datalake destroy --force --deep-clean
+# Cost monitoring
+./scripts/cli/datalake costs
 ```
 
 ## Best Practices
