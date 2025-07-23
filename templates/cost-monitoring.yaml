@@ -62,13 +62,15 @@ Resources:
           Amount: !Ref MonthlyBudgetLimit
           Unit: USD
         CostFilters:
-          TagKey:
-            - Project
-          TagValue:
-            - DataLake
+          Service:
+            - Amazon Elastic MapReduce
+            - Amazon Simple Storage Service
+            - AWS Glue
+            - Amazon Athena
+            - AWS Lake Formation
         TimePeriod:
-          Start: !Sub "${AWS::StackName}-start"
-          End: "2087-06-15_00:00"
+          Start: 1640995200
+          End: 3000000000
         PlannedBudgetLimits: {}
       NotificationsWithSubscribers:
         - Notification:
@@ -76,7 +78,6 @@ Resources:
             ComparisonOperator: GREATER_THAN
             Threshold: 80
             ThresholdType: PERCENTAGE
-            NotificationState: ALARM
           Subscribers:
             - SubscriptionType: EMAIL
               Address: !Ref AlertEmail
@@ -85,7 +86,6 @@ Resources:
             ComparisonOperator: GREATER_THAN
             Threshold: 100
             ThresholdType: PERCENTAGE
-            NotificationState: ALARM
           Subscribers:
             - SubscriptionType: EMAIL
               Address: !Ref AlertEmail
@@ -96,7 +96,6 @@ Resources:
             ComparisonOperator: GREATER_THAN
             Threshold: 100
             ThresholdType: PERCENTAGE
-            NotificationState: ALARM
           Subscribers:
             - SubscriptionType: EMAIL
               Address: !Ref AlertEmail
@@ -214,42 +213,43 @@ Resources:
                           total_cost += cost
                           service_costs[service] = cost
                   
-                  print(f"Total daily cost: ${total_cost:.2f}")
-                  print(f"Daily threshold: ${daily_threshold:.2f}")
+                  print("Total daily cost: ${:.2f}".format(total_cost))
+                  print("Daily threshold: ${:.2f}".format(daily_threshold))
                   
                   # Check if cost exceeds threshold
                   if total_cost > daily_threshold:
                       # Prepare alert message
-                      message = f"""
-  Data Lake Daily Cost Alert - {environment.upper()}
-  
-  Date: {start_date.strftime('%Y-%m-%d')}
-  Total Cost: ${total_cost:.2f}
-  Threshold: ${daily_threshold:.2f}
-  Overage: ${total_cost - daily_threshold:.2f}
-  
-  Service Breakdown:
-  """
+                      date_str = start_date.strftime('%Y-%m-%d')
+                      env_upper = environment.upper()
+                      total_cost_str = "${:.2f}".format(total_cost)
+                      threshold_str = "${:.2f}".format(daily_threshold)
+                      overage_str = "${:.2f}".format(total_cost - daily_threshold)
+                      
+                      message = "Data Lake Daily Cost Alert - " + env_upper + "\n\n"
+                      message += "Date: " + date_str + "\n"
+                      message += "Total Cost: " + total_cost_str + "\n"  
+                      message += "Threshold: " + threshold_str + "\n"
+                      message += "Overage: " + overage_str + "\n\n"
+                      message += "Service Breakdown:\n"
                       
                       # Add service breakdown
                       for service, cost in sorted(service_costs.items(), key=lambda x: x[1], reverse=True):
                           if cost > 0.01:  # Only show services with significant cost
-                              message += f"  - {service}: ${cost:.2f}\n"
+                              cost_str = "${:.2f}".format(cost)
+                              message += "  - " + service + ": " + cost_str + "\n"
                       
-                      message += f"""
-  Recommendations:
-  - Check EMR clusters and terminate if not needed
-  - Review S3 storage and lifecycle policies
-  - Optimize Glue job configurations
-  - Consider using Spot instances for EMR
-  
-  AWS Console: https://console.aws.amazon.com/billing/home#/
-  """
+                      message += "\nRecommendations:\n"
+                      message += "- Check EMR clusters and terminate if not needed\n"
+                      message += "- Review S3 storage and lifecycle policies\n"
+                      message += "- Optimize Glue job configurations\n"
+                      message += "- Consider using Spot instances for EMR\n\n"
+                      message += "AWS Console: https://console.aws.amazon.com/billing/home#/\n"
                       
                       # Send SNS alert
+                      subject = "Data Lake Cost Alert: " + total_cost_str + " exceeds " + threshold_str
                       sns_client.publish(
                           TopicArn=sns_topic_arn,
-                          Subject=f"Data Lake Cost Alert: ${total_cost:.2f} exceeds ${daily_threshold:.2f}",
+                          Subject=subject,
                           Message=message
                       )
                       

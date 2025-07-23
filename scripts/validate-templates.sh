@@ -6,7 +6,8 @@
 # 描述: 验证CloudFormation模板的语法、安全性和最佳实践
 # =============================================================================
 
-set -euo pipefail
+set -eu
+# pipefailはBash 3.x互換性のため無効化
 
 # 获取脚本目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,12 +22,12 @@ readonly TEMPLATE_VALIDATOR_VERSION="1.0.0"
 # 全局变量
 # =============================================================================
 
-declare -g VALIDATION_ERRORS=0
-declare -g VALIDATION_WARNINGS=0
-declare -g TEMPLATE_DIR="${PROJECT_ROOT}/templates"
-declare -g VALIDATION_REPORT=""
-declare -g DETAILED_OUTPUT=false
-declare -g STRICT_MODE=false
+VALIDATION_ERRORS=0
+VALIDATION_WARNINGS=0
+TEMPLATE_DIR="${PROJECT_ROOT}/templates"
+VALIDATION_REPORT=""
+DETAILED_OUTPUT=false
+STRICT_MODE=false
 
 # =============================================================================
 # 辅助函数

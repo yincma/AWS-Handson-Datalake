@@ -112,11 +112,11 @@ check_emr_cluster() {
 upload_script_to_s3() {
     print_step "Uploading PySpark script to S3..."
     
-    local script_s3_path="s3://${ANALYTICS_BUCKET}/scripts/pyspark_analytics.py"
+    local script_s3_path="s3://${ANALYTICS_BUCKET}/scripts/ecommerce_analytics.py"
     
     # Check if script exists locally
-    if [[ ! -f "scripts/pyspark_analytics.py" ]]; then
-        print_error "PySpark script not found: scripts/pyspark_analytics.py"
+    if [[ ! -f "scripts/core/data_processing/ecommerce_analytics.py" ]]; then
+        print_error "PySpark script not found: scripts/core/data_processing/ecommerce_analytics.py"
         print_info "Please ensure the script exists in the scripts directory"
         exit 1
     fi
@@ -129,7 +129,7 @@ upload_script_to_s3() {
     fi
     
     # Upload script to S3
-    if aws s3 cp scripts/pyspark_analytics.py "$script_s3_path" --region "$AWS_REGION" &>/dev/null; then
+    if aws s3 cp scripts/core/data_processing/ecommerce_analytics.py "$script_s3_path" --region "$AWS_REGION" &>/dev/null; then
         print_info "Script uploaded to: $script_s3_path"
         
         # Verify upload
