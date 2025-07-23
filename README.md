@@ -27,6 +27,8 @@
 
 ## 技術アーキテクチャ
 
+![AWS Data Lake Architecture](./Arch.drawio.svg)
+
 ### コアサービススタック
 - **ストレージ層**: Amazon S3 (3層ストレージ + ライフサイクル管理)
 - **データカタログ**: AWS Glue (Crawler + データカタログ)
@@ -37,25 +39,144 @@
 
 ### データフローアーキテクチャ
 
+<div align="center">
+
+#### 🌊 **データレイク3層アーキテクチャ**
+
+</div>
+
+```mermaid
+graph TB
+    %% スタイル定義
+    classDef rawStyle fill:#FFE5CC,stroke:#FF8C42,stroke-width:3px,color:#000
+    classDef cleanStyle fill:#CCE5FF,stroke:#4285F4,stroke-width:3px,color:#000
+    classDef analyticsStyle fill:#D4EDDA,stroke:#28A745,stroke-width:3px,color:#000
+    classDef catalogStyle fill:#F8F9FA,stroke:#6C757D,stroke-width:2px,color:#000
+    classDef processStyle fill:#E7E7E7,stroke:#495057,stroke-width:2px,color:#000
+    
+    %% データソース
+    subgraph sources["📥 Data Sources"]
+        DS1[CSV Files]
+        DS2[JSON Files]
+        DS3[Log Files]
+    end
+    
+    %% ストレージ層
+    subgraph storage["🗄️ Storage Layers"]
+        RAW["🥉 Raw Layer (Bronze)<br/>生データ保存<br/>S3: dl-handson-v2-raw-dev"]:::rawStyle
+        CLEAN["🥈 Clean Layer (Silver)<br/>クレンジング済みデータ<br/>S3: dl-handson-v2-clean-dev"]:::cleanStyle
+        ANALYTICS["🥇 Analytics Layer (Gold)<br/>分析用集計データ<br/>S3: dl-handson-v2-analytics-dev"]:::analyticsStyle
+    end
+    
+    %% カタログ層
+    CATALOG["📚 AWS Glue Data Catalog<br/>統合メタデータ管理"]:::catalogStyle
+    
+    %% 処理層
+    subgraph processing["⚙️ Processing & Analytics"]
+        CRAWLER["🔍 Glue Crawler<br/>自動スキーマ検出"]:::processStyle
+        DATABREW["🧹 Glue DataBrew<br/>データクレンジング"]:::processStyle
+        EMR["⚡ EMR + Spark<br/>大規模データ処理"]:::processStyle
+        ATHENA["📊 Amazon Athena<br/>SQLクエリ分析"]:::processStyle
+    end
+    
+    %% ガバナンス
+    LAKEFORMATION["🛡️ Lake Formation<br/>アクセス権限管理"]:::processStyle
+    
+    %% データフロー
+    DS1 --> RAW
+    DS2 --> RAW
+    DS3 --> RAW
+    
+    RAW -->|ETL処理| CLEAN
+    CLEAN -->|変換・集計| ANALYTICS
+    
+    RAW -.->|メタデータ登録| CATALOG
+    CLEAN -.->|メタデータ登録| CATALOG
+    ANALYTICS -.->|メタデータ登録| CATALOG
+    
+    CATALOG <--> CRAWLER
+    CATALOG <--> DATABREW
+    CATALOG <--> EMR
+    CATALOG <--> ATHENA
+    
+    CATALOG <--> LAKEFORMATION
+    
+    %% 注釈
+    RAW -.- crawlerNote["定期的に<br/>自動スキャン"]
+    CLEAN -.- databrewNote["データ品質<br/>ルール適用"]
+    ANALYTICS -.- emrNote["ビジネス<br/>ロジック実行"]
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Raw Layer     │     │  Clean Layer    │     │Analytics Layer  │
-│  (Bronze)       │────▶│   (Silver)      │────▶│    (Gold)       │
-│                 │     │                 │     │                 │
-│ S3: raw-dev     │     │ S3: clean-dev   │     │S3: analytics-dev│
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-        │                       │                       │
-        ▼                       ▼                       ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     AWS Glue Data Catalog                        │
-│              (統一メタデータ管理・スキーマ定義)                    │
-└─────────────────────────────────────────────────────────────────┘
-        │                       │                       │
-        ▼                       ▼                       ▼
-┌──────────────┐      ┌──────────────┐        ┌──────────────────┐
-│  Glue Crawler│      │ EMR + Spark  │        │  Amazon Athena   │
-│  (自動検出)   │      │ (データ変換) │        │  (SQL分析)       │
-└──────────────┘      └──────────────┘        └──────────────────┘
+
+<div align="center">
+
+#### 📋 **データ処理パイプライン詳細**
+
+</div>
+
+| 🏷️ **ステージ** | 📂 **レイヤー** | 📝 **説明** | 💾 **ストレージ** | 🔧 **処理ツール** | ⏱️ **頻度** |
+|:---:|:---:|:---|:---|:---|:---:|
+| **1️⃣ 収集** | Raw<br/>(Bronze) | 様々なソースからの生データをそのまま保存 | `s3://dl-handson-v2-raw-dev/`<br/>`└── landing/`<br/>`    └── ecommerce/` | S3 Transfer<br/>Kinesis Firehose | リアルタイム |
+| **2️⃣ 検証** | Raw → Clean | スキーマ検出とデータ品質チェック | Glue Data Catalog | Glue Crawler<br/>Data Quality | 1時間毎 |
+| **3️⃣ 変換** | Clean<br/>(Silver) | データクレンジング、正規化、重複排除 | `s3://dl-handson-v2-clean-dev/`<br/>`└── processed/`<br/>`    └── ecommerce/` | Glue DataBrew<br/>Glue ETL | 日次 |
+| **4️⃣ 集計** | Analytics<br/>(Gold) | ビジネスメトリクス計算、KPI生成 | `s3://dl-handson-v2-analytics-dev/`<br/>`└── aggregated/`<br/>`    └── reports/` | EMR Spark<br/>PySpark Job | 日次/週次 |
+| **5️⃣ 分析** | Query Layer | アドホック分析とレポート作成 | Athena Query Results | Amazon Athena<br/>QuickSight | オンデマンド |
+
+<div align="center">
+
+#### 🎯 **主要コンポーネントの詳細**
+
+</div>
+
+<table>
+<tr>
+<td width="50%">
+
+**📊 データ管理コンポーネント**
+
+| コンポーネント | 役割 |
+|:---|:---|
+| 🔍 **Glue Crawler** | • 新規データの自動検出<br/>• スキーマの自動推論<br/>• パーティション管理 |
+| 📚 **Glue Data Catalog** | • 統一メタデータストア<br/>• テーブル定義管理<br/>• データ系譜追跡 |
+| 🛡️ **Lake Formation** | • 細粒度アクセス制御<br/>• データマスキング<br/>• 監査ログ管理 |
+
+</td>
+<td width="50%">
+
+**⚡ 処理・分析コンポーネント**
+
+| コンポーネント | 役割 |
+|:---|:---|
+| 🧹 **Glue DataBrew** | • ビジュアルデータ準備<br/>• 250+の変換機能<br/>• データプロファイリング |
+| ⚡ **EMR + Spark** | • 大規模並列処理<br/>• 機械学習パイプライン<br/>• ストリーミング処理 |
+| 📊 **Amazon Athena** | • サーバーレスSQL分析<br/>• 標準SQL準拠<br/>• 結果キャッシュ機能 |
+
+</td>
+</tr>
+</table>
+
+<div align="center">
+
+#### 🔄 **データライフサイクル管理**
+
+</div>
+
+```mermaid
+graph LR
+    subgraph lifecycle["📅 S3ライフサイクルポリシー"]
+        HOT["🔥 Hot<br/>0-30日<br/>Standard"]
+        WARM["🌡️ Warm<br/>31-90日<br/>Standard-IA"]
+        COLD["❄️ Cold<br/>91-365日<br/>Glacier IR"]
+        ARCHIVE["🗄️ Archive<br/>365日+<br/>Deep Archive"]
+        
+        HOT -->|30日後| WARM
+        WARM -->|90日後| COLD
+        COLD -->|365日後| ARCHIVE
+    end
+    
+    style HOT fill:#FFE5CC,stroke:#FF8C42
+    style WARM fill:#FFF3CD,stroke:#FFC107
+    style COLD fill:#CCE5FF,stroke:#4285F4
+    style ARCHIVE fill:#E7E7E7,stroke:#6C757D
 ```
 
 ## 前提条件
@@ -92,10 +213,6 @@ echo "ENVIRONMENT=$ENVIRONMENT"        # dev
 ```bash
 # 基本インフラストラクチャのみデプロイ
 ./scripts/cli/datalake deploy
-
-# または従来のスクリプト（下位互換性）
-./scripts/deploy-all.sh
-```
 
 ### 4. 完全デプロイメント（EMR + Analytics）
 ```bash
