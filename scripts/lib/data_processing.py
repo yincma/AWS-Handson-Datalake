@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-AWS数据湖项目 - 面向对象数据处理模块
-版本: 2.0.0
-描述: 提供面向对象的数据处理基础类和具体实现
+AWS Data Lake Project - Object-Oriented Data Processing Module
+Version: 2.0.0
+Description: Provides object-oriented data processing base classes and implementations
 """
 
 import logging
@@ -30,38 +30,38 @@ try:
     PYSPARK_AVAILABLE = True
 except ImportError:
     PYSPARK_AVAILABLE = False
-    # 为类型注解设置fallback值
+    # Set fallback values for type annotations
     SparkSession = None
     DataFrame = None
 
 
 # =============================================================================
-# 配置和数据类
+# Configuration and Data Classes
 # =============================================================================
 
 @dataclass
 class DataLakeConfig:
-    """数据湖配置类"""
+    """Data Lake Configuration Class"""
     project_prefix: str
     environment: str
     aws_region: str
     
-    # S3配置
+    # S3 Configuration
     raw_bucket: Optional[str] = None
     clean_bucket: Optional[str] = None
     analytics_bucket: Optional[str] = None
     
-    # Glue配置
+    # Glue Configuration
     database_name: Optional[str] = None
     
-    # Spark配置
+    # Spark Configuration
     spark_config: Dict[str, Any] = field(default_factory=dict)
     
-    # 日志配置
+    # Logging Configuration
     log_level: str = "INFO"
     
     def __post_init__(self):
-        """初始化后处理，设置默认值"""
+        """Post-initialization processing, set default values"""
         if not self.raw_bucket:
             self.raw_bucket = f"{self.project_prefix}-raw-{self.environment}"
         if not self.clean_bucket:
@@ -73,7 +73,7 @@ class DataLakeConfig:
     
     @classmethod
     def from_environment(cls) -> 'DataLakeConfig':
-        """从环境变量创建配置"""
+        """Create configuration from environment variables"""
         return cls(
             project_prefix=os.getenv('PROJECT_PREFIX', 'dl-handson'),
             environment=os.getenv('ENVIRONMENT', 'dev'),
@@ -88,7 +88,7 @@ class DataLakeConfig:
 
 @dataclass
 class ProcessingResult:
-    """数据处理结果类"""
+    """Data processing result class"""
     success: bool
     message: str
     details: Dict[str, Any] = field(default_factory=dict)
@@ -97,35 +97,35 @@ class ProcessingResult:
 
 
 # =============================================================================
-# 自定义异常类
+# Custom Exception Classes
 # =============================================================================
 
 class DataLakeError(Exception):
-    """数据湖操作基础异常"""
+    """Base exception for data lake operations"""
     pass
 
 
 class ConfigurationError(DataLakeError):
-    """配置相关异常"""
+    """Configuration related exceptions"""
     pass
 
 
 class AWSServiceError(DataLakeError):
-    """AWS服务相关异常"""
+    """AWS service related exceptions"""
     pass
 
 
 class DataProcessingError(DataLakeError):
-    """数据处理相关异常"""
+    """Data processing related exceptions"""
     pass
 
 
 # =============================================================================
-# 装饰器
+# Decorators
 # =============================================================================
 
 def handle_aws_errors(func):
-    """AWS操作错误处理装饰器"""
+    """AWS operation error handling decorator"""
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
@@ -134,52 +134,52 @@ def handle_aws_errors(func):
             error_message = e.response['Error']['Message']
             
             if error_code in ['AccessDenied', 'UnauthorizedOperation']:
-                raise AWSServiceError(f"权限被拒绝: {error_message}")
+                raise AWSServiceError(f"Permission denied: {error_message}")
             elif error_code in ['InvalidParameter', 'ValidationException']:
-                raise ConfigurationError(f"无效配置: {error_message}")
+                raise ConfigurationError(f"Invalid configuration: {error_message}")
             else:
-                raise AWSServiceError(f"AWS服务错误: {error_message}")
+                raise AWSServiceError(f"AWS service error: {error_message}")
         except BotoCoreError as e:
-            raise AWSServiceError(f"AWS连接错误: {str(e)}")
+            raise AWSServiceError(f"AWS connection error: {str(e)}")
         except Exception as e:
-            logging.error(f"未预期的错误在 {func.__name__}: {str(e)}")
-            raise DataLakeError(f"未预期的错误: {str(e)}")
+            logging.error(f"Unexpected error in {func.__name__}: {str(e)}")
+            raise DataLakeError(f"Unexpected error: {str(e)}")
     
     return wrapper
 
 
 def log_execution_time(func):
-    """记录函数执行时间的装饰器"""
+    """Decorator to log function execution time"""
     def wrapper(*args, **kwargs):
         start_time = datetime.now()
         logger = logging.getLogger(func.__module__)
         
         try:
-            logger.info(f"开始执行: {func.__name__}")
+            logger.info(f"Starting execution: {func.__name__}")
             result = func(*args, **kwargs)
             
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
             
-            logger.info(f"完成执行: {func.__name__}, 耗时: {duration:.2f}秒")
+            logger.info(f"Completed execution: {func.__name__}, duration: {duration:.2f} seconds")
             return result
             
         except Exception as e:
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
             
-            logger.error(f"执行失败: {func.__name__}, 耗时: {duration:.2f}秒, 错误: {str(e)}")
+            logger.error(f"Execution failed: {func.__name__}, duration: {duration:.2f} seconds, error: {str(e)}")
             raise
     
     return wrapper
 
 
 # =============================================================================
-# 基础数据处理器抽象类
+# Base Data Processor Abstract Class
 # =============================================================================
 
 class DataProcessor(ABC):
-    """数据处理器抽象基类"""
+    """Abstract base class for data processors"""
     
     def __init__(self, config: DataLakeConfig):
         self.config = config
@@ -187,7 +187,7 @@ class DataProcessor(ABC):
         self._validate_config()
     
     def _setup_logging(self) -> logging.Logger:
-        """设置结构化日志"""
+        """Set up structured logging"""
         logger = logging.getLogger(self.__class__.__name__)
         logger.setLevel(getattr(logging, self.config.log_level.upper()))
         
@@ -202,21 +202,21 @@ class DataProcessor(ABC):
         return logger
     
     def _validate_config(self) -> None:
-        """验证配置有效性"""
+        """Validate configuration validity"""
         required_fields = ['project_prefix', 'environment', 'aws_region']
         
         for field in required_fields:
             if not getattr(self.config, field):
-                raise ConfigurationError(f"缺少必需的配置字段: {field}")
+                raise ConfigurationError(f"Missing required configuration field: {field}")
     
     @abstractmethod
     def process(self, input_path: str, output_path: str, **kwargs) -> ProcessingResult:
-        """处理数据的抽象方法"""
+        """Abstract method for processing data"""
         pass
     
     @abstractmethod
     def validate_input(self, input_path: str) -> bool:
-        """验证输入数据的抽象方法"""
+        """Abstract method for validating input data"""
         pass
     
     def create_processing_result(
@@ -225,7 +225,7 @@ class DataProcessor(ABC):
         message: str, 
         **kwargs
     ) -> ProcessingResult:
-        """创建处理结果对象的辅助方法"""
+        """Helper method to create processing result object"""
         return ProcessingResult(
             success=success,
             message=message,
@@ -236,11 +236,11 @@ class DataProcessor(ABC):
 
 
 # =============================================================================
-# Glue数据目录管理器
+# Glue Data Catalog Manager
 # =============================================================================
 
 class GlueTableManager:
-    """AWS Glue表管理器"""
+    """AWS Glue Table Manager"""
     
     def __init__(self, config: DataLakeConfig):
         self.config = config
@@ -251,31 +251,31 @@ class GlueTableManager:
     
     @handle_aws_errors
     def _validate_permissions(self) -> None:
-        """验证Glue权限"""
+        """Validate Glue permissions"""
         try:
             self.glue_client.get_databases()
         except ClientError as e:
-            raise AWSServiceError(f"Glue权限不足: {e}")
+            raise AWSServiceError(f"Insufficient Glue permissions: {e}")
     
     @handle_aws_errors
     @log_execution_time
     def create_database(self, database_name: Optional[str] = None) -> bool:
-        """创建Glue数据库"""
+        """Create Glue database"""
         db_name = database_name or self.config.database_name
         
         try:
             self.glue_client.create_database(
                 DatabaseInput={
                     'Name': db_name,
-                    'Description': f'数据湖数据库 - {self.config.project_prefix} - {self.config.environment}'
+                    'Description': f'Data Lake Database - {self.config.project_prefix} - {self.config.environment}'
                 }
             )
-            self.logger.info(f"成功创建数据库: {db_name}")
+            self.logger.info(f"Successfully created database: {db_name}")
             return True
             
         except ClientError as e:
             if e.response['Error']['Code'] == 'AlreadyExistsException':
-                self.logger.info(f"数据库已存在: {db_name}")
+                self.logger.info(f"Database already exists: {db_name}")
                 return True
             else:
                 raise
@@ -283,7 +283,7 @@ class GlueTableManager:
     @handle_aws_errors
     @log_execution_time
     def create_table(self, table_config: Dict[str, Any]) -> bool:
-        """创建Glue表"""
+        """Create Glue table"""
         table_name = table_config['name']
         database_name = table_config.get('database', self.config.database_name)
         
@@ -304,7 +304,7 @@ class GlueTableManager:
             }
         }
         
-        # 添加分区信息（如果存在）
+        # Add partition information (if exists)
         if 'partition_keys' in table_config:
             table_input['PartitionKeys'] = table_config['partition_keys']
         
@@ -313,62 +313,62 @@ class GlueTableManager:
                 DatabaseName=database_name,
                 TableInput=table_input
             )
-            self.logger.info(f"成功创建表: {database_name}.{table_name}")
+            self.logger.info(f"Successfully created table: {database_name}.{table_name}")
             return True
             
         except ClientError as e:
             if e.response['Error']['Code'] == 'AlreadyExistsException':
-                self.logger.info(f"表已存在: {database_name}.{table_name}")
+                self.logger.info(f"Table already exists: {database_name}.{table_name}")
                 return True
             else:
                 raise
     
     @handle_aws_errors
     def create_tables_from_schema(self, schema_file: str) -> ProcessingResult:
-        """从JSON架构文件创建多个表"""
+        """Create multiple tables from JSON schema file"""
         try:
             with open(schema_file, 'r', encoding='utf-8') as f:
                 schemas = json.load(f)
         except FileNotFoundError:
             return ProcessingResult(
                 success=False,
-                message=f"架构文件不存在: {schema_file}",
-                errors=[f"文件不存在: {schema_file}"]
+                message=f"Schema file not found: {schema_file}",
+                errors=[f"File not found: {schema_file}"]
             )
         except json.JSONDecodeError as e:
             return ProcessingResult(
                 success=False,
-                message=f"JSON格式错误: {str(e)}",
-                errors=[f"JSON解析错误: {str(e)}"]
+                message=f"JSON format error: {str(e)}",
+                errors=[f"JSON parsing error: {str(e)}"]
             )
         
         success_count = 0
         error_count = 0
         errors = []
         
-        # 首先创建数据库
+        # Create database first
         if not self.create_database():
             return ProcessingResult(
                 success=False,
-                message="数据库创建失败",
-                errors=["数据库创建失败"]
+                message="Database creation failed",
+                errors=["Database creation failed"]
             )
         
-        # 创建表
+        # Create tables
         for table in schemas.get('tables', []):
             try:
                 if self.create_table(table):
                     success_count += 1
                 else:
                     error_count += 1
-                    errors.append(f"表创建失败: {table.get('name', 'unknown')}")
+                    errors.append(f"Table creation failed: {table.get('name', 'unknown')}")
             except Exception as e:
                 error_count += 1
-                errors.append(f"表创建异常: {table.get('name', 'unknown')} - {str(e)}")
+                errors.append(f"Table creation exception: {table.get('name', 'unknown')} - {str(e)}")
         
         return ProcessingResult(
             success=error_count == 0,
-            message=f"创建了 {success_count} 个表，{error_count} 个失败",
+            message=f"Created {success_count} tables, {error_count} failed",
             metrics={
                 'success_count': success_count,
                 'error_count': error_count,
@@ -379,7 +379,7 @@ class GlueTableManager:
     
     @handle_aws_errors
     def list_tables(self, database_name: Optional[str] = None) -> List[str]:
-        """列出数据库中的所有表"""
+        """List all tables in the database"""
         db_name = database_name or self.config.database_name
         
         response = self.glue_client.get_tables(DatabaseName=db_name)
@@ -387,7 +387,7 @@ class GlueTableManager:
     
     @handle_aws_errors
     def delete_table(self, table_name: str, database_name: Optional[str] = None) -> bool:
-        """删除表"""
+        """Delete table"""
         db_name = database_name or self.config.database_name
         
         try:
@@ -395,35 +395,35 @@ class GlueTableManager:
                 DatabaseName=db_name,
                 Name=table_name
             )
-            self.logger.info(f"成功删除表: {db_name}.{table_name}")
+            self.logger.info(f"Successfully deleted table: {db_name}.{table_name}")
             return True
         except ClientError as e:
             if e.response['Error']['Code'] == 'EntityNotFoundException':
-                self.logger.warning(f"表不存在: {db_name}.{table_name}")
+                self.logger.warning(f"Table does not exist: {db_name}.{table_name}")
                 return True
             else:
                 raise
 
 
 # =============================================================================
-# Spark分析处理器
+# Spark Analytics Processor
 # =============================================================================
 
 class SparkAnalyticsProcessor(DataProcessor):
-    """Spark分析处理器"""
+    """Spark Analytics Processor"""
     
     def __init__(self, config: DataLakeConfig):
         if not PYSPARK_AVAILABLE:
-            raise DataProcessingError("PySpark未安装或不可用")
+            raise DataProcessingError("PySpark is not installed or not available")
         
         super().__init__(config)
         self.spark_session: Optional[SparkSession] = None
     
     def _create_spark_session(self) -> SparkSession:
-        """创建优化的Spark会话"""
+        """Create optimized Spark session"""
         app_name = f"{self.config.project_prefix}-analytics-{self.config.environment}"
         
-        # 默认Spark配置
+        # Default Spark configuration
         default_config = {
             "spark.sql.adaptive.enabled": "true",
             "spark.sql.adaptive.coalescePartitions.enabled": "true",
@@ -434,7 +434,7 @@ class SparkAnalyticsProcessor(DataProcessor):
             "spark.hadoop.fs.s3a.aws.credentials.provider": "com.amazonaws.auth.InstanceProfileCredentialsProvider"
         }
         
-        # 合并用户配置
+        # Merge user configuration
         spark_config = {**default_config, **self.config.spark_config}
         
         builder = SparkSession.builder.appName(app_name)
@@ -444,28 +444,28 @@ class SparkAnalyticsProcessor(DataProcessor):
         
         spark = builder.getOrCreate()
         
-        # 设置日志级别
+        # Set log level
         spark.sparkContext.setLogLevel("WARN")
         
-        self.logger.info(f"Spark会话已创建: {app_name}")
+        self.logger.info(f"Spark session created: {app_name}")
         return spark
     
     @property
     def spark(self) -> SparkSession:
-        """懒加载Spark会话"""
+        """Lazy load Spark session"""
         if self.spark_session is None:
             self.spark_session = self._create_spark_session()
         return self.spark_session
     
     def validate_input(self, input_path: str) -> bool:
-        """验证输入数据"""
-        # 检查S3路径是否存在和可访问
+        """Validate input data"""
+        # Check if S3 path exists and is accessible
         import boto3
         
         if input_path.startswith('s3://') or input_path.startswith('s3a://'):
             s3_client = boto3.client('s3', region_name=self.config.aws_region)
             
-            # 解析S3路径
+            # Parse S3 path
             path_parts = input_path.replace('s3://', '').replace('s3a://', '').split('/', 1)
             bucket = path_parts[0]
             prefix = path_parts[1] if len(path_parts) > 1 else ''
@@ -478,27 +478,27 @@ class SparkAnalyticsProcessor(DataProcessor):
                 )
                 
                 if 'Contents' not in response:
-                    self.logger.warning(f"输入路径为空: {input_path}")
+                    self.logger.warning(f"Input path is empty: {input_path}")
                     return False
                 
-                self.logger.info(f"输入验证通过: {input_path}")
+                self.logger.info(f"Input validation passed: {input_path}")
                 return True
                 
             except ClientError as e:
-                self.logger.error(f"输入验证失败: {input_path} - {str(e)}")
+                self.logger.error(f"Input validation failed: {input_path} - {str(e)}")
                 return False
         
-        # 对于本地路径
+        # For local paths
         return Path(input_path).exists()
     
     @log_execution_time
     def read_data(self, data_path: str, data_format: str = "csv", **options) -> DataFrame:
-        """读取数据的通用方法"""
-        self.logger.info(f"从 {data_path} 读取 {data_format} 数据")
+        """Generic method for reading data"""
+        self.logger.info(f"Reading {data_format} data from {data_path}")
         
         reader = self.spark.read.format(data_format)
         
-        # 设置默认选项
+        # Set default options
         if data_format.lower() == "csv":
             default_options = {"header": "true", "inferSchema": "true"}
             options = {**default_options, **options}
@@ -518,8 +518,8 @@ class SparkAnalyticsProcessor(DataProcessor):
         partition_by: Optional[List[str]] = None,
         **options
     ) -> None:
-        """写入数据的通用方法"""
-        self.logger.info(f"向 {output_path} 写入 {data_format} 数据")
+        """Generic method for writing data"""
+        self.logger.info(f"Writing {data_format} data to {output_path}")
         
         writer = df.write.format(data_format).mode(mode)
         
@@ -533,52 +533,52 @@ class SparkAnalyticsProcessor(DataProcessor):
     
     @log_execution_time
     def process(self, input_path: str, output_path: str, **kwargs) -> ProcessingResult:
-        """执行Spark分析处理"""
+        """Execute Spark analytics processing"""
         try:
             if not self.validate_input(input_path):
                 return self.create_processing_result(
                     success=False,
-                    message="输入验证失败",
-                    errors=[f"输入路径无效或不可访问: {input_path}"]
+                    message="Input validation failed",
+                    errors=[f"Invalid or inaccessible input path: {input_path}"]
                 )
             
-            # 执行具体的分析逻辑
+            # Execute specific analytics logic
             result = self._run_analytics(input_path, output_path, **kwargs)
             
-            self.logger.info(f"分析处理完成: {output_path}")
+            self.logger.info(f"Analytics processing completed: {output_path}")
             return result
             
         except Exception as e:
-            self.logger.error(f"分析处理失败: {str(e)}")
+            self.logger.error(f"Analytics processing failed: {str(e)}")
             return self.create_processing_result(
                 success=False,
-                message="分析处理失败",
+                message="Analytics processing failed",
                 errors=[str(e)]
             )
     
     def _run_analytics(self, input_path: str, output_path: str, **kwargs) -> ProcessingResult:
-        """运行具体的分析逻辑 - 子类可以重写此方法"""
-        # 这是基础实现，子类应该重写此方法来实现具体的业务逻辑
+        """Run specific analytics logic - subclasses can override this method"""
+        # This is the base implementation, subclasses should override this method to implement specific business logic
         df = self.read_data(input_path)
         
-        # 基础分析：计算行数
+        # Basic analysis: count rows
         row_count = df.count()
         
-        # 写入结果
+        # Write results
         self.write_data(df, output_path)
         
         return self.create_processing_result(
             success=True,
-            message="基础分析完成",
+            message="Basic analysis completed",
             metrics={"row_count": row_count}
         )
     
     def cleanup(self) -> None:
-        """清理资源"""
+        """Clean up resources"""
         if self.spark_session:
             self.spark_session.stop()
             self.spark_session = None
-            self.logger.info("Spark会话已停止")
+            self.logger.info("Spark session stopped")
     
     def __enter__(self):
         return self
@@ -588,11 +588,11 @@ class SparkAnalyticsProcessor(DataProcessor):
 
 
 # =============================================================================
-# 工厂类
+# Factory Class
 # =============================================================================
 
 class DataProcessorFactory:
-    """数据处理器工厂类"""
+    """Data processor factory class"""
     
     _processors = {
         'spark_analytics': SparkAnalyticsProcessor,
@@ -601,43 +601,43 @@ class DataProcessorFactory:
     
     @classmethod
     def create_processor(cls, processor_type: str, config: DataLakeConfig):
-        """创建数据处理器实例"""
+        """Create data processor instance"""
         if processor_type not in cls._processors:
             available_types = ', '.join(cls._processors.keys())
-            raise ValueError(f"不支持的处理器类型: {processor_type}. 可用类型: {available_types}")
+            raise ValueError(f"Unsupported processor type: {processor_type}. Available types: {available_types}")
         
         processor_class = cls._processors[processor_type]
         return processor_class(config)
     
     @classmethod
     def register_processor(cls, name: str, processor_class):
-        """注册新的处理器类型"""
+        """Register new processor type"""
         cls._processors[name] = processor_class
 
 
 # =============================================================================
-# 实用工具函数
+# Utility Functions
 # =============================================================================
 
 def load_config_from_file(config_path: str) -> DataLakeConfig:
-    """从配置文件加载配置"""
+    """Load configuration from file"""
     config_file = Path(config_path)
     
     if not config_file.exists():
-        raise ConfigurationError(f"配置文件不存在: {config_path}")
+        raise ConfigurationError(f"Configuration file does not exist: {config_path}")
     
-    # 这里可以根据文件扩展名支持不同的配置格式
+    # Support different config formats based on file extension
     if config_file.suffix.lower() == '.json':
         with open(config_file, 'r', encoding='utf-8') as f:
             config_data = json.load(f)
         return DataLakeConfig(**config_data)
     else:
-        # 默认从环境变量加载
+        # Default to loading from environment variables
         return DataLakeConfig.from_environment()
 
 
 def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None) -> None:
-    """设置全局日志配置"""
+    """Set up global logging configuration"""
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -649,34 +649,34 @@ def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None) -> No
 
 
 # =============================================================================
-# 主函数示例
+# Main Function Example
 # =============================================================================
 
 def main():
-    """主函数示例"""
+    """Main function example"""
     import argparse
     
-    parser = argparse.ArgumentParser(description='数据湖数据处理')
+    parser = argparse.ArgumentParser(description='Data Lake Data Processing')
     parser.add_argument('--processor', choices=['spark_analytics', 'glue_tables'], 
-                       required=True, help='处理器类型')
-    parser.add_argument('--input', help='输入路径')
-    parser.add_argument('--output', help='输出路径')
-    parser.add_argument('--config', help='配置文件路径')
-    parser.add_argument('--log-level', default='INFO', help='日志级别')
+                       required=True, help='Processor type')
+    parser.add_argument('--input', help='Input path')
+    parser.add_argument('--output', help='Output path')
+    parser.add_argument('--config', help='Configuration file path')
+    parser.add_argument('--log-level', default='INFO', help='Log level')
     
     args = parser.parse_args()
     
-    # 设置日志
+    # Set up logging
     setup_logging(args.log_level)
     
     try:
-        # 加载配置
+        # Load configuration
         if args.config:
             config = load_config_from_file(args.config)
         else:
             config = DataLakeConfig.from_environment()
         
-        # 创建处理器
+        # Create processor
         processor = DataProcessorFactory.create_processor(args.processor, config)
         
         if args.processor == 'spark_analytics' and args.input and args.output:
@@ -684,13 +684,13 @@ def main():
                 result = processor.process(args.input, args.output)
                 
             if result.success:
-                print(f"处理成功: {result.message}")
+                print(f"Processing successful: {result.message}")
                 if result.metrics:
-                    print(f"指标: {result.metrics}")
+                    print(f"Metrics: {result.metrics}")
             else:
-                print(f"处理失败: {result.message}")
+                print(f"Processing failed: {result.message}")
                 for error in result.errors:
-                    print(f"错误: {error}")
+                    print(f"Error: {error}")
                 sys.exit(1)
         
         elif args.processor == 'glue_tables':
@@ -698,20 +698,20 @@ def main():
             result = processor.create_tables_from_schema(schema_file)
             
             if result.success:
-                print(f"表创建成功: {result.message}")
+                print(f"Table creation successful: {result.message}")
             else:
-                print(f"表创建失败: {result.message}")
+                print(f"Table creation failed: {result.message}")
                 for error in result.errors:
-                    print(f"错误: {error}")
+                    print(f"Error: {error}")
                 sys.exit(1)
         
         else:
-            print("请提供必需的参数")
+            print("Please provide required parameters")
             parser.print_help()
             sys.exit(1)
             
     except Exception as e:
-        logging.error(f"程序执行失败: {str(e)}")
+        logging.error(f"Program execution failed: {str(e)}")
         sys.exit(1)
 
 

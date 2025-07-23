@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # AWS Data Lake Cleanup Script (v2.0)
-# モジュラーアーキテクチャ対応リソース削除スクリプト
-# 推奨: 新しい 'datalake destroy' コマンドを使用してください
+# Modular architecture compatible resource deletion script
+# Recommended: Use the new 'datalake destroy' command
 
 # DO NOT use set -e to allow complete cleanup even with errors
 

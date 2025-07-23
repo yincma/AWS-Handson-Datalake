@@ -1,11 +1,11 @@
 #!/bin/bash
 # AWS Data Lake Complete One-Click Deployment Script (v2.0)
-# モジュラーアーキテクチャを使用した新しい統一デプロイメントスクリプト
-# 推奨: 新しい 'datalake' CLI を使用してください
+# New unified deployment script using modular architecture
+# Recommended: Use the new 'datalake' CLI
 
 set -e
 
-# 共通ライブラリをロード
+# Load common library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 

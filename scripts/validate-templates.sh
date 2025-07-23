@@ -1,25 +1,25 @@
 #!/bin/bash
 
 # =============================================================================
-# CloudFormation 模板验证工具
-# 版本: 1.0.0
-# 描述: 验证CloudFormation模板的语法、安全性和最佳实践
+# CloudFormation Template Validation Tool
+# Version: 1.0.0
+# Description: Validate CloudFormation template syntax, security and best practices
 # =============================================================================
 
 set -eu
 # pipefailはBash 3.x互換性のため無効化
 
-# 获取脚本目录
+# Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# 加载通用工具库
+# Load common utility library
 source "$SCRIPT_DIR/lib/common.sh"
 
 readonly TEMPLATE_VALIDATOR_VERSION="1.0.0"
 
 # =============================================================================
-# 全局变量
+# Global Variables
 # =============================================================================
 
 VALIDATION_ERRORS=0
@@ -30,7 +30,7 @@ DETAILED_OUTPUT=false
 STRICT_MODE=false
 
 # =============================================================================
-# 辅助函数
+# Helper Functions
 # =============================================================================
 
 increment_error() {
@@ -64,7 +64,7 @@ print_validation_info() {
 }
 
 # =============================================================================
-# CloudFormation语法验证
+# CloudFormation Syntax Validation
 # =============================================================================
 
 validate_cloudformation_syntax() {
@@ -72,41 +72,41 @@ validate_cloudformation_syntax() {
     local template_name
     template_name=$(basename "$template")
     
-    print_debug "验证CloudFormation语法: $template_name"
+    print_debug "Validating CloudFormation syntax: $template_name"
     
-    # 检查文件是否存在
+    # Check if file exists
     if [[ ! -f "$template" ]]; then
-        print_validation_error "$template" "模板文件不存在"
+        print_validation_error "$template" "Template file does not exist"
         return 1
     fi
     
-    # 检查文件是否为空
+    # Check if file is empty
     if [[ ! -s "$template" ]]; then
-        print_validation_error "$template" "模板文件为空"
+        print_validation_error "$template" "Template file is empty"
         return 1
     fi
     
-    # AWS CLI 语法验证
+    # AWS CLI syntax validation
     local validation_output
     if validation_output=$(aws cloudformation validate-template --template-body "file://$template" 2>&1); then
-        print_validation_info "$template" "AWS语法验证通过"
+        print_validation_info "$template" "AWS syntax validation passed"
         
-        # 检查模板描述
+        # Check template description
         if echo "$validation_output" | grep -q '"Description"'; then
-            print_validation_info "$template" "包含模板描述"
+            print_validation_info "$template" "Contains template description"
         else
-            print_validation_warning "$template" "建议添加模板描述"
+            print_validation_warning "$template" "Recommend adding template description"
         fi
         
         return 0
     else
-        print_validation_error "$template" "AWS语法验证失败: $validation_output"
+        print_validation_error "$template" "AWS syntax validation failed: $validation_output"
         return 1
     fi
 }
 
 # =============================================================================
-# CFN-Lint 验证
+# CFN-Lint Validation
 # =============================================================================
 
 check_cfn_lint_available() {
@@ -115,8 +115,8 @@ check_cfn_lint_available() {
     elif python3 -m cfn_lint --version &>/dev/null; then
         return 0
     else
-        print_warning "cfn-lint未安装，跳过高级验证"
-        print_info "安装命令: pip install cfn-lint"
+        print_warning "cfn-lint not installed, skipping advanced validation"
+        print_info "Installation command: pip install cfn-lint"
         return 1
     fi
 }
@@ -130,7 +130,7 @@ validate_with_cfn_lint() {
         return 0
     fi
     
-    print_debug "执行cfn-lint验证: $template_name"
+    print_debug "Executing cfn-lint validation: $template_name"
     
     local cfn_lint_cmd
     if command -v cfn-lint &>/dev/null; then
@@ -139,29 +139,29 @@ validate_with_cfn_lint() {
         cfn_lint_cmd="python3 -m cfn_lint"
     fi
     
-    # 执行cfn-lint，忽略某些警告
+    # Execute cfn-lint, ignoring certain warnings
     local lint_output
     if lint_output=$($cfn_lint_cmd "$template" \
         --ignore-checks W3002 W3005 \
         --format parseable 2>&1); then
         
-        print_validation_info "$template" "CFN-Lint验证通过"
+        print_validation_info "$template" "CFN-Lint validation passed"
         return 0
     else
-        # 分析输出，区分错误和警告
+        # Analyze output, distinguish errors and warnings
         while IFS= read -r line; do
             if [[ -n "$line" ]]; then
                 if [[ "$line" =~ .*:[E][0-9]+:.* ]]; then
-                    print_validation_error "$template" "CFN-Lint错误: $line"
+                    print_validation_error "$template" "CFN-Lint error: $line"
                 elif [[ "$line" =~ .*:[W][0-9]+:.* ]]; then
-                    print_validation_warning "$template" "CFN-Lint警告: $line"
+                    print_validation_warning "$template" "CFN-Lint warning: $line"
                 elif [[ "$line" =~ .*:[I][0-9]+:.* ]]; then
-                    print_validation_info "$template" "CFN-Lint信息: $line"
+                    print_validation_info "$template" "CFN-Lint info: $line"
                 fi
             fi
         done <<< "$lint_output"
         
-        # 如果有错误且在严格模式下，返回失败
+        # If there are errors and in strict mode, return failure
         if [[ "$STRICT_MODE" == true ]] && echo "$lint_output" | grep -q ":[E][0-9]:"; then
             return 1
         fi
@@ -171,7 +171,7 @@ validate_with_cfn_lint() {
 }
 
 # =============================================================================
-# 自定义验证规则
+# Custom Validation Rules
 # =============================================================================
 
 validate_security_rules() {
@@ -179,48 +179,48 @@ validate_security_rules() {
     local template_name
     template_name=$(basename "$template")
     
-    print_debug "验证安全规则: $template_name"
+    print_debug "Validating security rules: $template_name"
     
-    # 检查S3桶加密
+    # Check S3 bucket encryption
     if grep -q "AWS::S3::Bucket" "$template"; then
         if ! grep -q "BucketEncryption\|ServerSideEncryptionConfiguration" "$template"; then
-            print_validation_error "$template" "S3桶未配置加密"
+            print_validation_error "$template" "S3 bucket not configured with encryption"
         else
-            print_validation_info "$template" "S3桶加密配置检查通过"
+            print_validation_info "$template" "S3 bucket encryption configuration check passed"
         fi
         
-        # 检查公共访问阻止
+        # Check public access blocking
         if ! grep -q "PublicAccessBlockConfiguration" "$template"; then
-            print_validation_warning "$template" "S3桶未配置公共访问阻止"
+            print_validation_warning "$template" "S3 bucket not configured with public access blocking"
         else
-            print_validation_info "$template" "S3桶公共访问阻止配置检查通过"
+            print_validation_info "$template" "S3 bucket public access blocking configuration check passed"
         fi
     fi
     
-    # 检查IAM策略
+    # Check IAM policies
     if grep -q "AWS::IAM::" "$template"; then
-        # 检查是否有过于宽泛的权限
+        # Check for overly broad permissions
         if grep -q '"Effect": "Allow".*"Action": "\*"' "$template" || \
            grep -q '"Effect": "Allow".*"Resource": "\*"' "$template"; then
-            print_validation_warning "$template" "发现可能过于宽泛的IAM权限"
+            print_validation_warning "$template" "Found potentially overly broad IAM permissions"
         fi
         
-        # 检查根权限
+        # Check for root permissions
         if grep -q '"Principal": "\*"' "$template"; then
-            print_validation_error "$template" "发现危险的通配符主体"
+            print_validation_error "$template" "Found dangerous wildcard principal"
         fi
     fi
     
-    # 检查硬编码的敏感信息
+    # Check for hardcoded sensitive information
     local sensitive_patterns=(
         "AKIA[0-9A-Z]{16}"          # AWS Access Key
         "[0-9]{12}"                 # AWS Account ID (需要更精确的检查)
-        "password.*['\"][^'\"]{8,}" # 可能的密码
+        "password.*['\"][^'\"]{8,}" # Possible password
     )
     
     for pattern in "${sensitive_patterns[@]}"; do
         if grep -qE "$pattern" "$template"; then
-            print_validation_error "$template" "可能包含硬编码的敏感信息: $pattern"
+            print_validation_error "$template" "May contain hardcoded sensitive information: $pattern"
         fi
     done
 }
@@ -230,9 +230,9 @@ validate_naming_conventions() {
     local template_name
     template_name=$(basename "$template")
     
-    print_debug "验证命名规范: $template_name"
+    print_debug "Validating naming conventions: $template_name"
     
-    # 检查资源命名是否使用参数
+    # Check if resource naming uses parameters
     local resource_count=0
     local parameterized_count=0
     
@@ -240,7 +240,7 @@ validate_naming_conventions() {
         if [[ "$line" =~ ^[[:space:]]*[A-Za-z][A-Za-z0-9]*:$ ]]; then
             resource_count=$((resource_count + 1))
             
-            # 检查资源名称是否使用Ref或Sub函数
+            # Check if resource name uses Ref or Sub functions
             local next_lines
             next_lines=$(grep -A 10 "$line" "$template" | head -10)
             if echo "$next_lines" | grep -q "Ref:\|!Ref\|Sub:\|!Sub"; then
@@ -252,9 +252,9 @@ validate_naming_conventions() {
     if [[ $resource_count -gt 0 ]]; then
         local param_percentage=$((parameterized_count * 100 / resource_count))
         if [[ $param_percentage -lt 50 ]]; then
-            print_validation_warning "$template" "建议更多使用参数化资源命名 ($param_percentage% 参数化)"
+            print_validation_warning "$template" "Recommend more parameterized resource naming ($param_percentage% parameterized)"
         else
-            print_validation_info "$template" "资源命名参数化程度良好 ($param_percentage%)"
+            print_validation_info "$template" "Good resource naming parameterization ($param_percentage%)"
         fi
     fi
 }
@@ -264,35 +264,35 @@ validate_best_practices() {
     local template_name
     template_name=$(basename "$template")
     
-    print_debug "验证最佳实践: $template_name"
+    print_debug "Validating best practices: $template_name"
     
-    # 检查是否有描述
+    # Check for description
     if ! grep -q "^Description:" "$template"; then
-        print_validation_warning "$template" "建议添加模板描述"
+        print_validation_warning "$template" "Recommend adding template description"
     fi
     
-    # 检查是否有标签
+    # Check for tags
     if ! grep -q "Tags:" "$template"; then
-        print_validation_warning "$template" "建议为资源添加标签"
+        print_validation_warning "$template" "Recommend adding tags to resources"
     fi
     
-    # 检查是否使用了条件
+    # Check if conditions are used
     if grep -q "Conditions:" "$template"; then
-        print_validation_info "$template" "使用了条件逻辑"
+        print_validation_info "$template" "Using conditional logic"
     fi
     
-    # 检查是否有输出
+    # Check for outputs
     if ! grep -q "Outputs:" "$template"; then
-        print_validation_warning "$template" "建议添加有用的输出"
+        print_validation_warning "$template" "Recommend adding useful outputs"
     fi
     
-    # 检查模板大小（CloudFormation限制为51200字节）
+    # Check template size (CloudFormation limit is 51200 bytes)
     local template_size
     template_size=$(wc -c < "$template")
     if [[ $template_size -gt 51200 ]]; then
-        print_validation_error "$template" "模板大小超过CloudFormation限制 (${template_size} > 51200 字节)"
+        print_validation_error "$template" "Template size exceeds CloudFormation limit (${template_size} > 51200 bytes)"
     elif [[ $template_size -gt 40000 ]]; then
-        print_validation_warning "$template" "模板大小接近CloudFormation限制 (${template_size} 字节)"
+        print_validation_warning "$template" "Template size approaching CloudFormation limit (${template_size} bytes)"
     fi
 }
 
@@ -301,12 +301,12 @@ validate_dependencies() {
     local template_name
     template_name=$(basename "$template")
     
-    print_debug "验证依赖关系: $template_name"
+    print_debug "Validating dependencies: $template_name"
     
-    # 检查循环依赖（简单检查）
+    # Check circular dependencies (simple check)
     local dependencies=()
     
-    # 提取Ref引用
+    # Extract Ref references
     while IFS= read -r line; do
         if [[ "$line" =~ Ref:[[:space:]]*([A-Za-z][A-Za-z0-9]*) ]] || \
            [[ "$line" =~ !Ref[[:space:]]+([A-Za-z][A-Za-z0-9]*) ]]; then
@@ -314,15 +314,15 @@ validate_dependencies() {
         fi
     done < "$template"
     
-    # 检查是否引用了不存在的资源
-    # 这里进行简单的检查，更复杂的逻辑需要解析整个模板结构
+    # Check if referencing non-existent resources
+    # Simple check here, more complex logic requires parsing entire template structure
     if [[ ${#dependencies[@]} -gt 0 ]]; then
-        print_validation_info "$template" "发现 ${#dependencies[@]} 个资源引用"
+        print_validation_info "$template" "Found ${#dependencies[@]} resource references"
     fi
 }
 
 # =============================================================================
-# 综合验证函数
+# Comprehensive Validation Functions
 # =============================================================================
 
 validate_single_template() {
@@ -330,15 +330,15 @@ validate_single_template() {
     local template_name
     template_name=$(basename "$template")
     
-    print_info "验证模板: $template_name"
+    print_info "Validating template: $template_name"
     
-    # 初始化模板特定的计数器
+    # Initialize template-specific counters
     local template_errors=0
     local template_warnings=0
     local initial_errors=$VALIDATION_ERRORS
     local initial_warnings=$VALIDATION_WARNINGS
     
-    # 执行各种验证
+    # Execute various validations
     validate_cloudformation_syntax "$template"
     validate_with_cfn_lint "$template"
     validate_security_rules "$template"
@@ -346,39 +346,39 @@ validate_single_template() {
     validate_best_practices "$template"
     validate_dependencies "$template"
     
-    # 计算模板特定的错误和警告数
+    # Calculate template-specific errors and warnings
     template_errors=$((VALIDATION_ERRORS - initial_errors))
     template_warnings=$((VALIDATION_WARNINGS - initial_warnings))
     
-    # 输出模板验证结果
+    # Output template validation results
     if [[ $template_errors -eq 0 ]]; then
         if [[ $template_warnings -eq 0 ]]; then
-            print_success "✓ $template_name: 验证通过，无问题"
+            print_success "✓ $template_name: Validation passed, no issues"
         else
-            print_info "⚠ $template_name: 验证通过，有 $template_warnings 个警告"
+            print_info "⚠ $template_name: Validation passed with $template_warnings warnings"
         fi
     else
-        print_error "✗ $template_name: 验证失败，有 $template_errors 个错误，$template_warnings 个警告"
+        print_error "✗ $template_name: Validation failed with $template_errors errors, $template_warnings warnings"
     fi
     
-    echo  # 空行分隔
+    echo  # Empty line separator
 }
 
 validate_all_templates() {
     local template_pattern="${1:-*.yaml}"
     local template_count=0
     
-    print_step "开始批量验证CloudFormation模板"
-    print_info "模板验证器版本: $TEMPLATE_VALIDATOR_VERSION"
-    print_info "模板目录: $TEMPLATE_DIR"
-    print_info "模板模式: $template_pattern"
+    print_step "Starting batch CloudFormation template validation"
+    print_info "Template validator version: $TEMPLATE_VALIDATOR_VERSION"
+    print_info "Template directory: $TEMPLATE_DIR"
+    print_info "Template pattern: $template_pattern"
     
-    # 检查模板目录是否存在
+    # Check if template directory exists
     if [[ ! -d "$TEMPLATE_DIR" ]]; then
-        handle_error 1 "模板目录不存在: $TEMPLATE_DIR"
+        handle_error 1 "Template directory does not exist: $TEMPLATE_DIR"
     fi
     
-    # 查找模板文件
+    # Find template files
     local templates=()
     while IFS= read -r -d '' template; do
         templates+=("$template")
@@ -386,18 +386,18 @@ validate_all_templates() {
     done < <(find "$TEMPLATE_DIR" -name "$template_pattern" -type f -print0)
     
     if [[ $template_count -eq 0 ]]; then
-        print_warning "未找到匹配的模板文件: $template_pattern"
+        print_warning "No matching template files found: $template_pattern"
         return 0
     fi
     
-    print_info "找到 $template_count 个模板文件"
+    print_info "Found $template_count template files"
     echo
     
-    # 验证每个模板
+    # Validate each template
     local current=0
     for template in "${templates[@]}"; do
         current=$((current + 1))
-        show_progress $current $template_count "验证中..."
+        show_progress $current $template_count "Validating..."
         validate_single_template "$template"
     done
     
@@ -405,118 +405,118 @@ validate_all_templates() {
 }
 
 # =============================================================================
-# 报告生成
+# Report Generation
 # =============================================================================
 
 generate_validation_report() {
     local output_file="${1:-validation_report.txt}"
     
-    print_step "生成验证报告"
+    print_step "Generating validation report"
     
     local report_content
     report_content=$(cat << EOF
-CloudFormation模板验证报告
+CloudFormation Template Validation Report
 ========================
-生成时间: $(date)
-验证器版本: $TEMPLATE_VALIDATOR_VERSION
-模板目录: $TEMPLATE_DIR
+Generation Time: $(date)
+Validator Version: $TEMPLATE_VALIDATOR_VERSION
+Template Directory: $TEMPLATE_DIR
 
-验证摘要:
+Validation Summary:
 ========
-总错误数: $VALIDATION_ERRORS
-总警告数: $VALIDATION_WARNINGS
-验证状态: $([[ $VALIDATION_ERRORS -eq 0 ]] && echo "通过" || echo "失败")
+Total Errors: $VALIDATION_ERRORS
+Total Warnings: $VALIDATION_WARNINGS
+Validation Status: $([[ $VALIDATION_ERRORS -eq 0 ]] && echo "PASSED" || echo "FAILED")
 
-建议:
+Recommendations:
 ====
 EOF
     )
     
     if [[ $VALIDATION_ERRORS -gt 0 ]]; then
-        report_content+=$'\n- 修复所有错误后再进行部署'
+        report_content+=$'\n- Fix all errors before deployment'
     fi
     
     if [[ $VALIDATION_WARNINGS -gt 0 ]]; then
-        report_content+=$'\n- 考虑修复警告以提高模板质量'
+        report_content+=$'\n- Consider fixing warnings to improve template quality'
     fi
     
     if [[ $VALIDATION_ERRORS -eq 0 && $VALIDATION_WARNINGS -eq 0 ]]; then
-        report_content+=$'\n- 所有模板验证通过，可以安全部署'
+        report_content+=$'\n- All templates validated successfully, safe to deploy'
     fi
     
-    # 写入报告文件
+    # Write report file
     echo "$report_content" > "$output_file"
-    print_success "验证报告已保存: $output_file"
+    print_success "Validation report saved: $output_file"
 }
 
 # =============================================================================
-# 工具函数
+# Utility Functions
 # =============================================================================
 
 install_cfn_lint() {
-    print_step "安装cfn-lint"
+    print_step "Installing cfn-lint"
     
     if command -v pip3 &>/dev/null; then
         pip3 install cfn-lint
     elif command -v pip &>/dev/null; then
         pip install cfn-lint
     else
-        print_error "未找到pip，请手动安装cfn-lint"
+        print_error "pip not found, please install cfn-lint manually"
         return 1
     fi
     
-    print_success "cfn-lint安装完成"
+    print_success "cfn-lint installation complete"
 }
 
 fix_common_issues() {
     local template="$1"
     local backup_file="${template}.backup"
     
-    print_info "尝试修复常见问题: $(basename "$template")"
+    print_info "Attempting to fix common issues: $(basename "$template")"
     
-    # 创建备份
+    # Create backup
     cp "$template" "$backup_file"
     
-    # 修复常见格式问题
-    # 移除尾随空格
+    # Fix common format issues
+    # Remove trailing spaces
     sed -i.tmp 's/[[:space:]]*$//' "$template" && rm "${template}.tmp"
     
-    # 确保文件以换行符结尾
+    # Ensure file ends with newline
     [[ -n "$(tail -c1 "$template")" ]] && echo >> "$template"
     
-    print_info "基本修复完成，备份保存为: $(basename "$backup_file")"
+    print_info "Basic fixes complete, backup saved as: $(basename "$backup_file")"
 }
 
 # =============================================================================
-# 主函数和CLI
+# Main Function and CLI
 # =============================================================================
 
 show_help() {
     cat << EOF
-CloudFormation模板验证器 v$TEMPLATE_VALIDATOR_VERSION
+CloudFormation Template Validator v$TEMPLATE_VALIDATOR_VERSION
 
-用法: $0 [选项] [模板模式]
+Usage: $0 [options] [template pattern]
 
-选项:
-    -h, --help              显示帮助信息
-    -v, --verbose           详细输出
-    -s, --strict            严格模式（警告也视为错误）
-    -d, --template-dir DIR  指定模板目录（默认: templates/）
-    -r, --report FILE       生成验证报告到指定文件
-    -f, --fix               尝试自动修复常见问题
-    --install-cfn-lint      安装cfn-lint工具
-    --single FILE           验证单个模板文件
+Options:
+    -h, --help              Show help information
+    -v, --verbose           Verbose output
+    -s, --strict            Strict mode (warnings treated as errors)
+    -d, --template-dir DIR  Specify template directory (default: templates/)
+    -r, --report FILE       Generate validation report to specified file
+    -f, --fix               Attempt to fix common issues automatically
+    --install-cfn-lint      Install cfn-lint tool
+    --single FILE           Validate single template file
 
-参数:
-    模板模式               要验证的模板文件模式（默认: *.yaml）
+Parameters:
+    template pattern        Template file pattern to validate (default: *.yaml)
 
-示例:
-    $0                          # 验证所有YAML模板
-    $0 s3*.yaml                 # 验证以s3开头的YAML模板
-    $0 --single templates/iam-roles-policies.yaml  # 验证单个模板
-    $0 --verbose --report validation.txt  # 详细输出并生成报告
-    $0 --strict                 # 严格模式验证
-    $0 --install-cfn-lint       # 安装cfn-lint工具
+Examples:
+    $0                          # Validate all YAML templates
+    $0 s3*.yaml                 # Validate YAML templates starting with s3
+    $0 --single templates/iam-roles-policies.yaml  # Validate single template
+    $0 --verbose --report validation.txt  # Verbose output and generate report
+    $0 --strict                 # Strict mode validation
+    $0 --install-cfn-lint       # Install cfn-lint tool
 
 EOF
 }
@@ -528,7 +528,7 @@ main() {
     local auto_fix=false
     local install_lint=false
     
-    # 解析命令行参数
+    # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             -h|--help)
@@ -565,7 +565,7 @@ main() {
                 shift 2
                 ;;
             -*)
-                print_error "未知选项: $1"
+                print_error "Unknown option: $1"
                 show_help
                 exit 1
                 ;;
@@ -576,69 +576,69 @@ main() {
         esac
     done
     
-    # 验证前置条件
+    # Validate prerequisites
     validate_prerequisites
     
-    # 安装cfn-lint（如果请求）
+    # Install cfn-lint (if requested)
     if [[ "$install_lint" == true ]]; then
         install_cfn_lint
         exit 0
     fi
     
-    # 开始验证
+    # Start validation
     start_timer "validation"
     
     if [[ -n "$single_template" ]]; then
-        # 验证单个模板
+        # Validate single template
         if [[ ! -f "$single_template" ]]; then
-            handle_error 1 "模板文件不存在: $single_template"
+            handle_error 1 "Template file does not exist: $single_template"
         fi
         
         validate_single_template "$single_template"
         
-        # 自动修复（如果请求）
+        # Auto fix (if requested)
         if [[ "$auto_fix" == true ]]; then
             fix_common_issues "$single_template"
         fi
     else
-        # 批量验证
+        # Batch validation
         validate_all_templates "$template_pattern"
     fi
     
     end_timer "validation"
     
-    # 生成报告
+    # Generate report
     if [[ -n "$report_file" ]]; then
         generate_validation_report "$report_file"
     fi
     
-    # 输出最终结果
+    # Output final results
     echo
-    print_step "验证结果摘要"
+    print_step "Validation Results Summary"
     
     if [[ $VALIDATION_ERRORS -eq 0 ]]; then
         if [[ $VALIDATION_WARNINGS -eq 0 ]]; then
-            print_success "🎉 所有模板验证通过，没有发现问题！"
+            print_success "🎉 All templates validated successfully, no issues found!"
         else
-            print_info "✅ 所有模板验证通过，但有 $VALIDATION_WARNINGS 个警告"
+            print_info "✅ All templates validated successfully, but with $VALIDATION_WARNINGS warnings"
             if [[ "$STRICT_MODE" == true ]]; then
-                print_error "严格模式下警告被视为错误"
+                print_error "Warnings treated as errors in strict mode"
                 exit 1
             fi
         fi
         exit 0
     else
-        print_error "❌ 发现 $VALIDATION_ERRORS 个错误和 $VALIDATION_WARNINGS 个警告"
+        print_error "❌ Found $VALIDATION_ERRORS errors and $VALIDATION_WARNINGS warnings"
         echo
-        print_info "修复建议:"
-        print_info "1. 查看上述错误信息并修复模板"
-        print_info "2. 重新运行验证确保问题已解决"
-        print_info "3. 考虑使用 --fix 选项自动修复常见问题"
+        print_info "Fix recommendations:"
+        print_info "1. Review the error messages above and fix templates"
+        print_info "2. Re-run validation to ensure issues are resolved"
+        print_info "3. Consider using --fix option to automatically fix common issues"
         exit 1
     fi
 }
 
-# 如果直接执行此脚本，运行主函数
+# If running this script directly, execute main function
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi
