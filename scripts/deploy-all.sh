@@ -239,16 +239,16 @@ main() {
     check_prerequisites
     track_deployment "Prerequisites" "PASSED"
     
-    # 检查是否从CLI调用（避免递归循环）
+    # Check if called from CLI (to avoid recursive loop)
     if [[ "${CALLED_FROM_CLI:-}" == "true" ]]; then
-        print_info "从CLI调用，继续使用传统部署逻辑"
+        print_info "Called from CLI, continuing with traditional deployment logic"
     else
-        # 新しいモジュラーシステムが利用可能かチェック
+        # Check if new modular system is available
         local new_cli="$SCRIPT_DIR/cli/datalake"
         if [[ -f "$new_cli" ]]; then
-            print_info "新しい統一CLIシステムを使用しています"
+            print_info "Using new unified CLI system"
             
-            # Bash 3.x兼容的参数处理
+            # Bash 3.x compatible argument processing
             local deploy_args=""
             if [[ "$DEPLOY_EMR" == "true" ]]; then
                 deploy_args="$deploy_args --emr"
@@ -257,7 +257,7 @@ main() {
                 deploy_args="$deploy_args --analytics"
             fi
             
-            # 执行新CLI部署
+            # Execute new CLI deployment
             if [[ -n "$deploy_args" ]]; then
                 "$new_cli" deploy $deploy_args
             else
@@ -267,7 +267,7 @@ main() {
         fi
     fi
     
-    # 従来のロジックを保持（フォールバック）
+    # Keep traditional logic (fallback)
     print_step "1/5 Deploying base infrastructure..."
     if ./scripts/setup-env.sh; then
         print_success "Base infrastructure deployed successfully"
@@ -435,15 +435,15 @@ EOF
     print_info "📄 Deployment log: deployment.log"
     print_info "📋 Summary report: deployment-summary.txt"
     
-    # 新しいCLIの推奨
+    # Recommend new CLI
     echo
-    print_info "💡 新機能: 統一CLIが利用可能です"
-    print_info "   ./scripts/cli/datalake --help でコマンドを確認"
-    print_info "   ./scripts/cli/datalake status でシステム状態を確認"
+    print_info "💡 New feature: Unified CLI is available"
+    print_info "   Check commands with: ./scripts/cli/datalake --help"
+    print_info "   Check system status with: ./scripts/cli/datalake status"
     
     if [[ "$DEPLOY_EMR" == "true" ]]; then
         print_warning "💰 EMR cluster is running! Remember to terminate it when done."
-        print_info "   ./scripts/cli/datalake destroy でクリーンアップ"
+        print_info "   Clean up with: ./scripts/cli/datalake destroy"
     fi
 }
 
