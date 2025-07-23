@@ -297,6 +297,7 @@ echo "ENVIRONMENT=$ENVIRONMENT"        # dev
 ### クリーンアップ
 
 ```bash
+# 🆕 推奨: 統一CLIを使用
 # 通常削除（確認プロンプト付き）
 ./scripts/cli/datalake destroy
 
@@ -304,7 +305,10 @@ echo "ENVIRONMENT=$ENVIRONMENT"        # dev
 ./scripts/cli/datalake destroy --force
 
 # 完全削除（S3バージョンオブジェクトも削除）
-./scripts/cleanup.sh --force --deep-clean --retry-failed
+./scripts/cli/datalake destroy --force --deep-clean
+
+# 従来のスクリプト（フォールバックのみ）
+# ./scripts/cleanup.sh --force --deep-clean --retry-failed
 ```
 
 ## システム構成
@@ -490,11 +494,16 @@ export LOG_LEVEL=DEBUG
 
 ### 学習後のクリーンアップ
 ```bash
+# 🆕 推奨: 統一CLIを使用
 # 完全削除（全リソースとデータを削除）
-./scripts/cleanup.sh --force --deep-clean --retry-failed
+./scripts/cli/datalake destroy --force --deep-clean
 
-# 削除の確認
-./scripts/utils/check-resources.sh
+# システム状態の確認
+./scripts/cli/datalake status
+
+# 従来の方法（フォールバックのみ）
+# ./scripts/cleanup.sh --force --deep-clean --retry-failed
+# ./scripts/utils/check-resources.sh
 ```
 
 ## セキュリティベストプラクティス
