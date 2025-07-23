@@ -313,16 +313,25 @@ main() {
         "ParameterKey=Environment,ParameterValue=${ENVIRONMENT}" \
         "ParameterKey=S3StackName,ParameterValue=datalake-s3-storage-${ENVIRONMENT}"
     
+    # Deploy Glue catalog
+    print_step "Deploying Glue catalog..."
+    deploy_stack "datalake-glue-catalog-${ENVIRONMENT}" "templates/glue-catalog.yaml" \
+        "ParameterKey=ProjectPrefix,ParameterValue=${PROJECT_PREFIX}" \
+        "ParameterKey=Environment,ParameterValue=${ENVIRONMENT}" \
+        "ParameterKey=S3StackName,ParameterValue=datalake-s3-storage-${ENVIRONMENT}" \
+        "ParameterKey=IAMStackName,ParameterValue=datalake-iam-roles-${ENVIRONMENT}"
+    
     # Deploy Lake Formation (simplified)
     print_step "Deploying Lake Formation..."
     TEMPLATE="templates/lake-formation-simple.yaml"
-    [[ ! -f "$TEMPLATE" ]] && TEMPLATE="templates/lake-formation.yaml"
+    # Use only the simplified template now
     
     deploy_stack "datalake-lake-formation-${ENVIRONMENT}" "$TEMPLATE" \
         "ParameterKey=ProjectPrefix,ParameterValue=${PROJECT_PREFIX}" \
         "ParameterKey=Environment,ParameterValue=${ENVIRONMENT}" \
         "ParameterKey=S3StackName,ParameterValue=datalake-s3-storage-${ENVIRONMENT}" \
-        "ParameterKey=IAMStackName,ParameterValue=datalake-iam-roles-${ENVIRONMENT}"
+        "ParameterKey=IAMStackName,ParameterValue=datalake-iam-roles-${ENVIRONMENT}" \
+        "ParameterKey=GlueStackName,ParameterValue=datalake-glue-catalog-${ENVIRONMENT}"
     
     # Upload sample data
     print_step "Uploading sample data..."
@@ -340,8 +349,9 @@ main() {
     # Configure Lake Formation permissions
     configure_lake_formation
     
-    # Create Glue tables
-    create_glue_tables
+    # Note: Glue tables are now created via CloudFormation template (Glue Crawlers)
+    # To populate tables, run crawlers after data upload:
+    print_info "Run Glue crawlers to create tables: aws glue start-crawler --name ${PROJECT_PREFIX}-raw-crawler"
     
     # Generate environment variables file
     sed -e "s/%DATE%/$(date)/" \
@@ -361,7 +371,7 @@ main() {
 
 📊 Next steps:
    1. Query data with Athena: SELECT * FROM "${PROJECT_PREFIX}-db".customers LIMIT 10;
-   2. Create EMR cluster: ./scripts/create-emr-cluster.sh
+   2. Create EMR cluster: ./scripts/core/compute/emr_cluster.sh create
    3. Clean up when done: ./scripts/cleanup.sh
 
 💡 Load environment variables: source configs/env-vars.sh

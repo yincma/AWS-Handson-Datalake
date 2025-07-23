@@ -23,19 +23,14 @@ Parameters:
     Description: Name of the IAM roles CloudFormation stack
     Default: datalake-iam-roles
 
+  GlueStackName:
+    Type: String
+    Description: Name of the Glue catalog CloudFormation stack
+    Default: datalake-glue-catalog
+
 Resources:
-  # Glue Database for Data Catalog
-  DataLakeDatabase:
-    Type: AWS::Glue::Database
-    Properties:
-      CatalogId: !Ref AWS::AccountId
-      DatabaseInput:
-        Name: !Sub "${ProjectPrefix}_db"
-        Description: !Sub "Data Lake database for ${ProjectPrefix} project"
-        Parameters:
-          Environment: !Ref Environment
-          Project: DataLake
-          CreatedBy: CloudFormation
+  # NOTE: DataLakeDatabase is created by the Glue module, not here
+  # We reference it via ImportValue to avoid resource conflicts
 
   # Register S3 Raw Data Location with service-linked role
   RawDataLocationResource:
@@ -67,83 +62,51 @@ Resources:
             Fn::ImportValue: !Sub "${S3StackName}-AnalyticsDataBucketArn"
       UseServiceLinkedRole: true
 
-  # Glue Crawler for Raw Data
-  RawDataCrawler:
-    Type: AWS::Glue::Crawler
-    Properties:
-      Name: !Sub "${ProjectPrefix}-raw-crawler"
-      Role: !Sub 
-        - "${GlueCrawlerRoleArn}"
-        - GlueCrawlerRoleArn: 
-            Fn::ImportValue: !Sub "${IAMStackName}-GlueCrawlerRoleArn"
-      DatabaseName: !Ref DataLakeDatabase
-      Description: "Crawler for raw data layer"
-      Schedule:
-        ScheduleExpression: "cron(0 1 * * ? *)"  # Daily at 1 AM UTC
-      Targets:
-        S3Targets:
-          - Path: !Sub 
-            - "s3://${RawBucketName}/ecommerce/"
-            - RawBucketName: 
-                Fn::ImportValue: !Sub "${S3StackName}-RawDataBucket"
-      SchemaChangePolicy:
-        UpdateBehavior: UPDATE_IN_DATABASE
-        DeleteBehavior: LOG
-      RecrawlPolicy:
-        RecrawlBehavior: CRAWL_EVERYTHING
-      Configuration: |
-        {
-          "Version": 1.0,
-          "CrawlerOutput": {
-            "Partitions": { "AddOrUpdateBehavior": "InheritFromTable" },
-            "Tables": { "AddOrUpdateBehavior": "MergeNewColumns" }
-          }
-        }
-
-  # Glue Crawler for Clean Data
-  CleanDataCrawler:
-    Type: AWS::Glue::Crawler
-    Properties:
-      Name: !Sub "${ProjectPrefix}-clean-crawler"
-      Role: !Sub 
-        - "${GlueCrawlerRoleArn}"
-        - GlueCrawlerRoleArn: 
-            Fn::ImportValue: !Sub "${IAMStackName}-GlueCrawlerRoleArn"
-      DatabaseName: !Ref DataLakeDatabase
-      Description: "Crawler for clean data layer"
-      Schedule:
-        ScheduleExpression: "cron(0 2 * * ? *)"  # Daily at 2 AM UTC
-      Targets:
-        S3Targets:
-          - Path: !Sub 
-            - "s3://${CleanBucketName}/"
-            - CleanBucketName: 
-                Fn::ImportValue: !Sub "${S3StackName}-CleanDataBucket"
-      SchemaChangePolicy:
-        UpdateBehavior: UPDATE_IN_DATABASE
-        DeleteBehavior: LOG
+  # NOTE: Crawlers are created by the Glue module, not here
+  # We reference them via ImportValue to avoid resource conflicts
 
 Outputs:
   DatabaseName:
-    Description: Name of the Glue database
-    Value: !Ref DataLakeDatabase
+    Description: Name of the Glue database (referenced from Glue stack)
+    Value: 
+      Fn::ImportValue: !Sub "${GlueStackName}-DatabaseName"
     Export:
       Name: !Sub "${AWS::StackName}-DatabaseName"
 
   RawDataCrawlerName:
-    Description: Name of the raw data crawler
-    Value: !Ref RawDataCrawler
+    Description: Name of the raw data crawler (referenced from Glue stack)
+    Value: 
+      Fn::ImportValue: !Sub "${GlueStackName}-RawDataCrawlerName"
     Export:
       Name: !Sub "${AWS::StackName}-RawDataCrawlerName"
 
   CleanDataCrawlerName:
-    Description: Name of the clean data crawler
-    Value: !Ref CleanDataCrawler
+    Description: Name of the clean data crawler (referenced from Glue stack)
+    Value: 
+      Fn::ImportValue: !Sub "${GlueStackName}-CleanDataCrawlerName"
     Export:
       Name: !Sub "${AWS::StackName}-CleanDataCrawlerName"
 
+  RawDataLocationResourceArn:
+    Description: ARN of the registered raw data location
+    Value: !Ref RawDataLocationResource
+    Export:
+      Name: !Sub "${AWS::StackName}-RawDataLocationArn"
+
+  CleanDataLocationResourceArn:
+    Description: ARN of the registered clean data location
+    Value: !Ref CleanDataLocationResource
+    Export:
+      Name: !Sub "${AWS::StackName}-CleanDataLocationArn"
+
+  AnalyticsDataLocationResourceArn:
+    Description: ARN of the registered analytics data location
+    Value: !Ref AnalyticsDataLocationResource
+    Export:
+      Name: !Sub "${AWS::StackName}-AnalyticsDataLocationArn"
+
   DataLakeSettingsStatus:
     Description: Lake Formation data lake settings configuration status
-    Value: "Simplified Configuration"
+    Value: "Service-linked role configuration with S3 location registration"
     Export:
       Name: !Sub "${AWS::StackName}-DataLakeSettingsStatus"

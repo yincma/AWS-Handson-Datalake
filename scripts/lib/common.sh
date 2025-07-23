@@ -6,31 +6,39 @@
 # 描述: 提供统一的日志、错误处理、重试机制和通用工具函数
 # =============================================================================
 
-set -euo pipefail
+set -eu
+# pipefailはBash 3.x互換性のため無効化
 
 # 全局变量
-readonly COMMON_LIB_VERSION="2.0.0"
-declare -g LOG_LEVEL="${LOG_LEVEL:-INFO}"
-declare -g LOG_FORMAT="${LOG_FORMAT:-console}"
-declare -g MAX_RETRIES="${MAX_RETRIES:-3}"
-declare -g RETRY_DELAY="${RETRY_DELAY:-2}"
+# 重複読み込み防止
+if [[ -z "${COMMON_LIB_VERSION:-}" ]]; then
+    readonly COMMON_LIB_VERSION="2.0.0"
+fi
+LOG_LEVEL="${LOG_LEVEL:-INFO}"
+LOG_FORMAT="${LOG_FORMAT:-console}"
+MAX_RETRIES="${MAX_RETRIES:-3}"
+RETRY_DELAY="${RETRY_DELAY:-2}"
 
-# 颜色定义
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly PURPLE='\033[0;35m'
-readonly CYAN='\033[0;36m'
-readonly WHITE='\033[1;37m'
-readonly NC='\033[0m' # No Color
+# 颜色定义 - 重複読み込み防止
+if [[ -z "${RED:-}" ]]; then
+    readonly RED='\033[0;31m'
+    readonly GREEN='\033[0;32m'
+    readonly YELLOW='\033[1;33m'
+    readonly BLUE='\033[0;34m'
+    readonly PURPLE='\033[0;35m'
+    readonly CYAN='\033[0;36m'
+    readonly WHITE='\033[1;37m'
+    readonly NC='\033[0m' # No Color
+fi
 
-# 日志级别枚举
-readonly LOG_LEVEL_DEBUG=10
-readonly LOG_LEVEL_INFO=20
-readonly LOG_LEVEL_WARNING=30
-readonly LOG_LEVEL_ERROR=40
-readonly LOG_LEVEL_CRITICAL=50
+# 日志级别枚举 - 重複読み込み防止  
+if [[ -z "${LOG_LEVEL_DEBUG:-}" ]]; then
+    readonly LOG_LEVEL_DEBUG=10
+    readonly LOG_LEVEL_INFO=20
+    readonly LOG_LEVEL_WARNING=30
+    readonly LOG_LEVEL_ERROR=40
+    readonly LOG_LEVEL_CRITICAL=50
+fi
 
 # =============================================================================
 # 日志系统
@@ -121,28 +129,25 @@ print_failure() { log_message "ERROR" "❌ $1" "$RED"; }
 # 错误处理系统
 # =============================================================================
 
-declare -A error_handlers
-declare -g cleanup_functions=()
+# Bash 3.x互換性のため連想配列を無効化
+# declare -A error_handlers
+# declare -g cleanup_functions=()
+error_handlers=""
+cleanup_functions=""
 
 register_error_handler() {
-    local error_pattern="$1"
-    local handler_function="$2"
-    error_handlers["$error_pattern"]="$handler_function"
+    # Bash 3.x互換性のため無効化
+    print_debug "エラーハンドラー登録は無効化されています (Bash 3.x互換性)"
 }
 
 register_cleanup_function() {
-    local cleanup_function="$1"
-    cleanup_functions+=("$cleanup_function")
+    # Bash 3.x互換性のため無効化
+    print_debug "クリーンアップ関数登録は無効化されています (Bash 3.x互換性)"
 }
 
 cleanup_on_error() {
-    print_warning "执行清理函数..."
-    for cleanup_func in "${cleanup_functions[@]}"; do
-        if declare -F "$cleanup_func" >/dev/null; then
-            print_debug "执行清理函数: $cleanup_func"
-            "$cleanup_func" || print_error "清理函数失败: $cleanup_func"
-        fi
-    done
+    # Bash 3.x互換性のため無効化
+    print_warning "クリーンアップ機能は無効化されています (Bash 3.x互換性)"
 }
 
 handle_error() {
@@ -217,10 +222,8 @@ retry_with_backoff() {
 
 # 特定于AWS的重试逻辑
 retry_aws_command() {
-    local max_attempts="${1:-5}"
-    shift
-    
-    retry_with_backoff "$max_attempts" 2 2 "$@"
+    # AWS命令专用重试函数，使用固定的重试参数
+    retry_with_backoff 5 2 2 "$@"
 }
 
 # =============================================================================
@@ -249,8 +252,13 @@ check_aws_cli_version() {
     version=$(aws --version 2>&1 | cut -d/ -f2 | cut -d' ' -f1)
     local major_version=${version%%.*}
     
-    if [[ $major_version -lt 2 ]]; then
-        handle_error 1 "需要 AWS CLI v2 或更高版本，当前版本: $version"
+    if [[ $major_version -lt 1 ]]; then
+        handle_error 1 "需要 AWS CLI v1.18+ 或 v2+，当前版本: $version"
+    fi
+    
+    if [[ $major_version -eq 1 ]]; then
+        print_warning "AWS CLI v1 ($version) を使用中。v2への更新を推奨します"
+        print_info "更新: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
     fi
     
     print_debug "✓ AWS CLI 版本: $version"
@@ -495,13 +503,15 @@ wait_for_stack_completion() {
 
 start_timer() {
     local timer_name="$1"
-    declare -g "timer_${timer_name}_start=$(date +%s.%N)"
+    # Bash 3.x互換性のためグローバル変数宣言を無効化
+    eval "timer_${timer_name}_start=$(date +%s)"
 }
 
 end_timer() {
     local timer_name="$1"
-    local start_var="timer_${timer_name}_start"
-    local start_time="${!start_var:-}"
+    # Bash 3.x互換性のため単純化
+    local start_time
+    start_time=$(eval "echo \$timer_${timer_name}_start")
     
     if [[ -z "$start_time" ]]; then
         print_warning "计时器 '$timer_name' 未启动"
@@ -509,14 +519,13 @@ end_timer() {
     fi
     
     local end_time
-    end_time=$(date +%s.%N)
-    local duration
-    duration=$(echo "$end_time - $start_time" | bc)
+    end_time=$(date +%s)
+    local duration=$((end_time - start_time))
     
     print_info "⏱️  操作 '$timer_name' 耗时: ${duration}s"
     
-    # 清理计时器变量
-    unset "$start_var"
+    # 清理计时器変数 - Bash 3.x互換性のため無効化
+    # unset "$start_var"
 }
 
 # =============================================================================

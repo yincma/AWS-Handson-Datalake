@@ -8,9 +8,13 @@
 
 # 加载通用工具库
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 source "$SCRIPT_DIR/../../lib/common.sh"
 
 readonly S3_STORAGE_MODULE_VERSION="1.0.0"
+
+# 設定を初期化
+load_config || true
 
 # =============================================================================
 # 模块配置
@@ -72,55 +76,159 @@ s3_storage_deploy() {
         return 1
     fi
     
-    # 检查堆栈是否已存在
-    local stack_exists=false
-    if check_stack_exists "$S3_STACK_NAME"; then
-        stack_exists=true
-        print_info "S3堆栈已存在，将进行更新"
-    else
-        print_info "创建新的S3堆栈"
-    fi
-    
     # 准备参数
     local stack_params=(
         "ParameterKey=ProjectPrefix,ParameterValue=$PROJECT_PREFIX"
         "ParameterKey=Environment,ParameterValue=$ENVIRONMENT"
     )
     
-    # 执行部署
-    local stack_operation
-    if [[ "$stack_exists" == true ]]; then
-        stack_operation="update-stack"
-        print_info "更新S3堆栈: $S3_STACK_NAME"
-    else
-        stack_operation="create-stack"
-        print_info "创建S3堆栈: $S3_STACK_NAME"
-    fi
-    
-    if retry_aws_command aws cloudformation "$stack_operation" \
-        --stack-name "$S3_STACK_NAME" \
-        --template-body "file://$S3_TEMPLATE_FILE" \
-        --parameters "${stack_params[@]}" \
-        --capabilities CAPABILITY_NAMED_IAM \
-        --tags Key=Project,Value="$PROJECT_PREFIX" Key=Environment,Value="$ENVIRONMENT"; then
+    # 检查堆栈是否已存在并处理ROLLBACK_COMPLETE状态
+    if check_stack_exists "$S3_STACK_NAME"; then
+        local stack_status
+        stack_status=$(get_stack_status "$S3_STACK_NAME")
         
-        print_info "堆栈操作已启动，等待完成..."
-        
-        # 等待堆栈操作完成
-        if wait_for_stack_completion "$S3_STACK_NAME"; then
-            print_success "S3存储模块部署成功"
+        # 检查是否为ROLLBACK_COMPLETE状态，如果是则删除栈
+        if [[ "$stack_status" == "ROLLBACK_COMPLETE" ]]; then
+            print_warning "S3堆栈处于ROLLBACK_COMPLETE状态，需要先删除"
+            print_info "删除S3堆栈: $S3_STACK_NAME"
             
-            # 获取并显示输出
-            s3_storage_show_outputs
+            # 首先清空S3桶
+            s3_storage_empty_buckets
             
-            return 0
+            if aws cloudformation delete-stack --stack-name "$S3_STACK_NAME"; then
+                print_info "等待堆栈删除完成..."
+                
+                # 等待删除完成
+                local timeout=900  # 15分钟
+                local elapsed=0
+                
+                while [[ $elapsed -lt $timeout ]]; do
+                    local current_status
+                    current_status=$(get_stack_status "$S3_STACK_NAME")
+                    
+                    if [[ "$current_status" == "DOES_NOT_EXIST" ]]; then
+                        print_success "S3堆栈删除完成"
+                        break
+                    elif [[ "$current_status" == "DELETE_FAILED" ]]; then
+                        print_error "S3堆栈删除失败"
+                        return 1
+                    fi
+                    
+                    sleep 10
+                    elapsed=$((elapsed + 10))
+                done
+                
+                if [[ $elapsed -ge $timeout ]]; then
+                    print_error "S3堆栈删除超时"
+                    return 1
+                fi
+            else
+                print_error "启动S3堆栈删除失败"
+                return 1
+            fi
+            
+            # 删除完成后，创建新栈
+            print_info "创建新的S3堆栈: $S3_STACK_NAME"
+            
+            if retry_aws_command aws cloudformation create-stack \
+                --stack-name "$S3_STACK_NAME" \
+                --template-body "file://$S3_TEMPLATE_FILE" \
+                --parameters "${stack_params[@]}" \
+                --capabilities CAPABILITY_NAMED_IAM \
+                --tags Key=Project,Value="$PROJECT_PREFIX" Key=Environment,Value="$ENVIRONMENT"; then
+                
+                print_info "堆栈操作已启动，等待完成..."
+                
+                # 等待堆栈操作完成
+                if wait_for_stack_completion "$S3_STACK_NAME"; then
+                    print_success "S3存储模块部署成功"
+                    
+                    # 获取并显示输出
+                    s3_storage_show_outputs
+                    
+                    return 0
+                else
+                    print_error "S3存储模块部署失败"
+                    return 1
+                fi
+            else
+                print_error "启动S3堆栈创建失败"
+                return 1
+            fi
         else
-            print_error "S3存储模块部署失败"
-            return 1
+            # 正常更新堆栈
+            print_info "S3堆栈已存在，将进行更新"
+            
+            # 尝试更新堆栈
+            local update_output
+            update_output=$(aws cloudformation update-stack \
+                --stack-name "$S3_STACK_NAME" \
+                --template-body "file://$S3_TEMPLATE_FILE" \
+                --parameters "${stack_params[@]}" \
+                --capabilities CAPABILITY_NAMED_IAM \
+                --tags Key=Project,Value="$PROJECT_PREFIX" Key=Environment,Value="$ENVIRONMENT" 2>&1)
+            
+            local update_exit_code=$?
+            
+            # 检查是否是"无需更新"的情况
+            if [[ $update_exit_code -ne 0 ]] && echo "$update_output" | grep -q "No updates are to be performed"; then
+                print_success "S3堆栈已是最新状态，无需更新"
+                
+                # 获取并显示输出
+                s3_storage_show_outputs
+                
+                return 0
+            elif [[ $update_exit_code -eq 0 ]]; then
+                print_info "堆栈更新已启动，等待完成..."
+                
+                # 等待堆栈操作完成
+                if wait_for_stack_completion "$S3_STACK_NAME"; then
+                    print_success "S3存储模块更新成功"
+                    
+                    # 获取并显示输出
+                    s3_storage_show_outputs
+                    
+                    return 0
+                else
+                    print_error "S3存储模块更新失败"
+                    return 1
+                fi
+            else
+                # 其他更新错误
+                print_error "启动S3堆栈更新失败"
+                echo "$update_output"
+                return 1
+            fi
         fi
     else
-        print_error "启动S3堆栈操作失败"
-        return 1
+        # 创建新的S3堆栈
+        print_info "创建新的S3堆栈: $S3_STACK_NAME"
+        
+        if retry_aws_command aws cloudformation create-stack \
+            --stack-name "$S3_STACK_NAME" \
+            --template-body "file://$S3_TEMPLATE_FILE" \
+            --parameters "${stack_params[@]}" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --tags Key=Project,Value="$PROJECT_PREFIX" Key=Environment,Value="$ENVIRONMENT"; then
+            
+            print_info "堆栈操作已启动，等待完成..."
+            
+            # 等待堆栈操作完成
+            if wait_for_stack_completion "$S3_STACK_NAME"; then
+                print_success "S3存储模块部署成功"
+                
+                # 获取并显示输出
+                s3_storage_show_outputs
+                
+                return 0
+            else
+                print_error "S3存储模块部署失败"
+                return 1
+            fi
+        else
+            print_error "启动S3堆栈创建失败"
+            return 1
+        fi
     fi
 }
 

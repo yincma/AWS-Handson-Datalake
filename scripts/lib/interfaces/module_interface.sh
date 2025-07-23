@@ -38,6 +38,60 @@ readonly OPTIONAL_MODULE_FUNCTIONS=(
 )
 
 # =============================================================================
+# 模块自动加载器
+# =============================================================================
+
+# 根据模块名查找并加载模块文件
+load_module_if_needed() {
+    local module_name="$1"
+    local function_name="${module_name}_validate"  # 使用validate作为测试函数
+    
+    # 如果函数已经存在，则模块已加载
+    if declare -F "$function_name" >/dev/null; then
+        print_debug "模块已加载: $module_name"
+        return 0
+    fi
+    
+    print_debug "尝试加载模块: $module_name"
+    
+    # 定义可能的模块文件路径
+    local module_file_candidates=(
+        "$PROJECT_ROOT/scripts/core/infrastructure/${module_name}.sh"
+        "$PROJECT_ROOT/scripts/core/catalog/${module_name}.sh"
+        "$PROJECT_ROOT/scripts/core/compute/${module_name}.sh"
+        "$PROJECT_ROOT/scripts/core/monitoring/${module_name}.sh"
+        "$PROJECT_ROOT/scripts/core/data_processing/${module_name}.sh"
+        "$PROJECT_ROOT/scripts/core/${module_name}.sh"
+    )
+    
+    # 尝试加载模块文件
+    for module_file in "${module_file_candidates[@]}"; do
+        if [[ -f "$module_file" ]]; then
+            print_debug "找到模块文件: $module_file"
+            
+            # 加载模块文件
+            if source "$module_file"; then
+                print_debug "成功加载模块: $module_name"
+                
+                # 验证模块是否正确加载（检查validate函数是否存在）
+                if declare -F "$function_name" >/dev/null; then
+                    print_debug "模块验证通过: $module_name"
+                    return 0
+                else
+                    print_warning "模块文件已加载但验证函数不存在: $function_name"
+                fi
+            else
+                print_error "加载模块文件失败: $module_file"
+            fi
+        fi
+    done
+    
+    print_error "未找到模块文件: $module_name"
+    print_debug "搜索路径: ${module_file_candidates[*]}"
+    return 1
+}
+
+# =============================================================================
 # 模块接口执行器
 # =============================================================================
 
@@ -52,6 +106,12 @@ module_interface() {
     fi
     
     local function_name="${module_name}_${action}"
+    
+    # 尝试加载模块（如果尚未加载）
+    if ! load_module_if_needed "$module_name"; then
+        print_error "无法加载模块: $module_name"
+        return 1
+    fi
     
     # 检查函数是否存在
     if ! declare -F "$function_name" >/dev/null; then
@@ -206,33 +266,18 @@ execute_batch_operation() {
 # 依赖管理
 # =============================================================================
 
-declare -A MODULE_DEPENDENCIES
+# Bash 3.x互換性のため連想配列を無効化
+# declare -A MODULE_DEPENDENCIES
+MODULE_DEPENDENCIES=""
 
 register_module_dependency() {
-    local module="$1"
-    local dependency="$2"
-    
-    if [[ -z "$module" || -z "$dependency" ]]; then
-        print_error "用法: register_module_dependency <module> <dependency>"
-        return 1
-    fi
-    
-    # 将依赖添加到关联数组
-    if [[ -n "${MODULE_DEPENDENCIES[$module]:-}" ]]; then
-        MODULE_DEPENDENCIES[$module]="${MODULE_DEPENDENCIES[$module]},$dependency"
-    else
-        MODULE_DEPENDENCIES[$module]="$dependency"
-    fi
-    
-    print_debug "注册模块依赖: $module -> $dependency"
+    # Bash 3.x互換性のため無効化
+    print_debug "モジュール依存関係の登録は無効化されています (Bash 3.x互換性)"
 }
 
 get_module_dependencies() {
-    local module="$1"
-    
-    if [[ -n "${MODULE_DEPENDENCIES[$module]:-}" ]]; then
-        echo "${MODULE_DEPENDENCIES[$module]}"
-    fi
+    # Bash 3.x互換性のため無効化
+    print_debug "モジュール依存関係の取得は無効化されています (Bash 3.x互換性)"
 }
 
 resolve_deployment_order() {

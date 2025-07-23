@@ -1,22 +1,13 @@
 #!/bin/bash
-# AWS Data Lake Complete One-Click Deployment Script
-# This script orchestrates the entire data lake deployment process
+# AWS Data Lake Complete One-Click Deployment Script (v2.0)
+# モジュラーアーキテクチャを使用した新しい統一デプロイメントスクリプト
+# 推奨: 新しい 'datalake' CLI を使用してください
 
 set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Function to print colored output
-print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-print_step() { echo -e "\n${BLUE}[STEP]${NC} $1"; }
-print_success() { echo -e "${GREEN}✅${NC} $1"; }
+# 共通ライブラリをロード
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/common.sh"
 
 # Default values
 DEPLOY_EMR=false
@@ -248,7 +239,35 @@ main() {
     check_prerequisites
     track_deployment "Prerequisites" "PASSED"
     
-    # Step 1: Base infrastructure deployment
+    # 检查是否从CLI调用（避免递归循环）
+    if [[ "${CALLED_FROM_CLI:-}" == "true" ]]; then
+        print_info "从CLI调用，继续使用传统部署逻辑"
+    else
+        # 新しいモジュラーシステムが利用可能かチェック
+        local new_cli="$SCRIPT_DIR/cli/datalake"
+        if [[ -f "$new_cli" ]]; then
+            print_info "新しい統一CLIシステムを使用しています"
+            
+            # Bash 3.x兼容的参数处理
+            local deploy_args=""
+            if [[ "$DEPLOY_EMR" == "true" ]]; then
+                deploy_args="$deploy_args --emr"
+            fi
+            if [[ "$RUN_PYSPARK" == "true" ]]; then
+                deploy_args="$deploy_args --analytics"
+            fi
+            
+            # 执行新CLI部署
+            if [[ -n "$deploy_args" ]]; then
+                "$new_cli" deploy $deploy_args
+            else
+                "$new_cli" deploy
+            fi
+            return $?
+        fi
+    fi
+    
+    # 従来のロジックを保持（フォールバック）
     print_step "1/5 Deploying base infrastructure..."
     if ./scripts/setup-env.sh; then
         print_success "Base infrastructure deployed successfully"
@@ -297,7 +316,7 @@ main() {
     # Step 3: Create EMR cluster (optional)
     if [[ "$DEPLOY_EMR" == "true" ]]; then
         print_step "3/5 Creating EMR cluster..."
-        if ./scripts/create-emr-cluster.sh --key-name "$KEY_NAME" --subnet-id "$SUBNET_ID"; then
+        if ./scripts/core/compute/emr_cluster.sh create --key-name "$KEY_NAME" --subnet-id "$SUBNET_ID"; then
             print_success "EMR cluster created successfully"
             track_deployment "EMR Cluster" "SUCCESS"
             
@@ -416,8 +435,15 @@ EOF
     print_info "📄 Deployment log: deployment.log"
     print_info "📋 Summary report: deployment-summary.txt"
     
+    # 新しいCLIの推奨
+    echo
+    print_info "💡 新機能: 統一CLIが利用可能です"
+    print_info "   ./scripts/cli/datalake --help でコマンドを確認"
+    print_info "   ./scripts/cli/datalake status でシステム状態を確認"
+    
     if [[ "$DEPLOY_EMR" == "true" ]]; then
         print_warning "💰 EMR cluster is running! Remember to terminate it when done."
+        print_info "   ./scripts/cli/datalake destroy でクリーンアップ"
     fi
 }
 

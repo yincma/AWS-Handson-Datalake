@@ -30,6 +30,8 @@ try:
     PYSPARK_AVAILABLE = True
 except ImportError:
     PYSPARK_AVAILABLE = False
+    # 为类型注解设置fallback值
+    SparkSession = None
     DataFrame = None
 
 
