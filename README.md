@@ -299,9 +299,6 @@ echo "ENVIRONMENT=$ENVIRONMENT"        # dev
 # 通常削除（確認プロンプト付き）
 ./scripts/cli/datalake destroy
 
-# 強制削除（確認なし）
-./scripts/cli/datalake destroy --force
-
 # 完全削除（S3バージョンオブジェクトも削除）
 ./scripts/cli/datalake destroy --force --deep-clean
 
