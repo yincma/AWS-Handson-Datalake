@@ -8,14 +8,16 @@ This project is a practical hands-on project for building an enterprise-level da
 
 The multi-tier architecture design (Raw → Clean → Analytics) implements a complete data processing pipeline for data collection, storage, transformation, and analysis.
 
-## 🆕 v2.1 New Features
+## 🆕 v2.1 New Features Highlights
 
 - **Unified CLI Management**: Centralized system management via `datalake` command
-- **Modular Architecture**: Highly independent component design with parallel deployment
-- **Simplified Configuration**: Simplified permission management with Lake Formation Simple
+- **Modular Architecture**: Highly independent component design with parallel deployment orchestrator
+- **Simplified Configuration**: Simplified permission management with Lake Formation Simple mode
 - **Enterprise-level Reliability**: Comprehensive error handling and retry logic
 - **Advanced Monitoring**: CloudTrail integrated security monitoring and cost optimization
-- **Automated Deployment**: Intelligent resource management considering dependencies
+- **Automated Deployment**: Intelligent resource management with dependency-aware deployment
+- **E-commerce Analytics**: Dedicated e-commerce data processing and analytics module
+- **Parallel Orchestration**: Optimized deployment time with intelligent parallel execution
 
 ## Table of Contents
 - [Technical Architecture](#technical-architecture)
@@ -50,354 +52,455 @@ The multi-tier architecture design (Raw → Clean → Analytics) implements a co
 ```mermaid
 graph TB
     %% Style definitions
-    classDef rawLayer fill:#FF6B6B,stroke:#C92A2A,stroke-width:2px,color:#FFF
-    classDef cleanLayer fill:#51CF66,stroke:#2B8A3E,stroke-width:2px,color:#FFF
-    classDef analyticsLayer fill:#339AF0,stroke:#1864AB,stroke-width:2px,color:#FFF
-    classDef process fill:#845EF7,stroke:#5F3DC4,stroke-width:2px,color:#FFF
+    classDef rawStyle fill:#FFE5CC,stroke:#FF8C42,stroke-width:3px,color:#000
+    classDef cleanStyle fill:#CCE5FF,stroke:#4285F4,stroke-width:3px,color:#000
+    classDef analyticsStyle fill:#D4EDDA,stroke:#28A745,stroke-width:3px,color:#000
+    classDef catalogStyle fill:#F8F9FA,stroke:#6C757D,stroke-width:2px,color:#000
+    classDef processStyle fill:#E7E7E7,stroke:#495057,stroke-width:2px,color:#000
     
-    %% Components
-    Sources["📊 Data Sources<br/>(CSV Files)"]
-    Raw["🗃️ Raw Layer<br/>(Raw Data Storage)"]
-    Clean["🧹 Clean Layer<br/>(Cleansed Data)"]
-    Analytics["📈 Analytics Layer<br/>(Analytics Results)"]
+    %% Data Sources
+    subgraph sources["📥 Data Sources"]
+        DS1[CSV Files]
+        DS2[JSON Files]
+        DS3[Log Files]
+    end
     
-    %% Processing
-    Crawl["🔍 Glue Crawler<br/>(Auto Schema Discovery)"]
-    DataBrew["🔧 Glue DataBrew<br/>(Data Cleansing)"]
-    EMR["⚡ EMR PySpark<br/>(Data Aggregation)"]
-    Athena["🔍 Athena<br/>(SQL Analytics)"]
+    %% Storage Layers
+    subgraph storage["🗄️ Storage Layers"]
+        RAW["🥉 Raw Layer (Bronze)<br/>Raw Data Storage<br/>S3: dl-handson-v2-raw-dev"]:::rawStyle
+        CLEAN["🥈 Clean Layer (Silver)<br/>Cleansed Data<br/>S3: dl-handson-v2-clean-dev"]:::cleanStyle
+        ANALYTICS["🥇 Analytics Layer (Gold)<br/>Aggregated Data<br/>S3: dl-handson-v2-analytics-dev"]:::analyticsStyle
+    end
     
-    %% Data flow
-    Sources -->|"Upload"| Raw
-    Raw -->|"Catalog"| Crawl
-    Crawl -->|"Schema"| Clean
-    Raw -->|"Clean"| DataBrew
-    DataBrew -->|"Transform"| Clean
-    Clean -->|"Process"| EMR
-    EMR -->|"Aggregate"| Analytics
-    Analytics -->|"Query"| Athena
+    %% Catalog Layer
+    CATALOG["📚 AWS Glue Data Catalog<br/>Unified Metadata Management"]:::catalogStyle
     
-    %% Apply styles
-    class Raw rawLayer
-    class Clean cleanLayer
-    class Analytics analyticsLayer
-    class Crawl,DataBrew,EMR,Athena process
+    %% Processing Layer
+    subgraph processing["⚙️ Processing & Analytics"]
+        CRAWLER["🔍 Glue Crawler<br/>Auto Schema Discovery"]:::processStyle
+        DATABREW["🧹 Glue DataBrew<br/>Data Cleansing"]:::processStyle
+        EMR["⚡ EMR + Spark<br/>Large-scale Processing"]:::processStyle
+        ATHENA["📊 Amazon Athena<br/>SQL Query Analysis"]:::processStyle
+    end
+    
+    %% Governance
+    LAKEFORMATION["🛡️ Lake Formation<br/>Access Permission Management"]:::processStyle
+    
+    %% Data Flow
+    DS1 --> RAW
+    DS2 --> RAW
+    DS3 --> RAW
+    
+    RAW -->|ETL Processing| CLEAN
+    CLEAN -->|Transform & Aggregate| ANALYTICS
+    
+    RAW -.->|Metadata Registration| CATALOG
+    CLEAN -.->|Metadata Registration| CATALOG
+    ANALYTICS -.->|Metadata Registration| CATALOG
+    
+    CATALOG <--> CRAWLER
+    CATALOG <--> DATABREW
+    CATALOG <--> EMR
+    CATALOG <--> ATHENA
+    
+    CATALOG <--> LAKEFORMATION
+    
+    %% Annotations
+    RAW -.- crawlerNote["Periodic<br/>Auto Scan"]
+    CLEAN -.- databrewNote["Data Quality<br/>Rules Applied"]
+    ANALYTICS -.- emrNote["Business<br/>Logic Execution"]
 ```
 
 ## Prerequisites
 
-### 1. Required Environment
-- Python 3.8+
-- AWS CLI v2+
-- jq command line tool
-- Bash 4.0+ (macOS users need to update)
-
-### 2. AWS Account Requirements
-- Administrator access or equivalent permissions
-- Service quotas: S3, Glue, EMR, Lake Formation, CloudFormation
-
-### 3. Local Environment Setup
-```bash
-# Clone the project
-git clone https://github.com/yourusername/aws-datalake-handson.git
-cd aws-datalake-handson
-
-# Install dependencies
-pip install -r requirements.txt
-
-# AWS CLI configuration
-aws configure
-```
+- AWS CLI installed
+- AWS credentials configured (`aws configure`)
+- Bash 4.0 or higher
+- Python 3.8 or higher (for EMR analytics jobs)
+- Appropriate IAM permissions (Administrator access recommended)
 
 ## Quick Start
 
-### 1. Basic Deployment (Infrastructure Only)
+### 1. Environment Setup
 ```bash
-# Execute basic deployment using unified CLI
+# Navigate to project directory
+cd /Users/umatoratatsu/Documents/AWS/AWS-Handson/Datalake/git
+
+# Customize configuration (optional)
+cp configs/config.env configs/config.local.env
+# Edit config.local.env to adjust project settings
+```
+
+### 2. Set Environment Variables
+```bash
+# Load configuration
+source configs/config.env
+
+# Verify environment variables
+echo "PROJECT_PREFIX=$PROJECT_PREFIX"  # dl-handson-v2
+echo "ENVIRONMENT=$ENVIRONMENT"        # dev
+```
+
+### 3. Basic Deployment
+```bash
+# Deploy base infrastructure only
 ./scripts/cli/datalake deploy
-
-# Check deployment status
-./scripts/cli/datalake status
 ```
 
-### 2. Full Deployment (Including Analytics)
+### 4. Full Deployment (with EMR + Analytics)
 ```bash
-# Full deployment including EMR cluster and analytics jobs
+# Complete deployment including EMR cluster and analytics jobs
 ./scripts/cli/datalake deploy --full
-
-# Monitor deployment progress
-./scripts/cli/datalake monitoring
 ```
 
-### 3. Cleanup Resources
+### 5. System Verification
 ```bash
-# Basic resource cleanup
-./scripts/cli/datalake destroy
+# Check overall system status
+./scripts/cli/datalake status
 
-# Complete cleanup of all resources (recommended)
-./scripts/cli/datalake destroy --force --deep-clean
-
-# Individual module cleanup
-./scripts/cli/datalake module cleanup emr_cluster
+# Verify deployed resources
+./scripts/utils/check-resources.sh
 ```
 
 ## Unified CLI Usage Guide
 
-**🆕 NEW in v2.1**: The project now includes a unified CLI system (`./scripts/cli/datalake`) that provides centralized management for all data lake operations. This is the **recommended** way to manage your data lake:
-
-### Why Use the New CLI?
-- **Simplified Commands**: Single entry point for all operations
-- **Modular Management**: Deploy and manage individual components
-- **Better Error Handling**: Integrated retry logic and validation
-- **Consistent Interface**: Unified command structure across all operations
-
 ### Basic Commands
+
 ```bash
 # Display help
 ./scripts/cli/datalake help
 
-# Check system status
+# Check version
+./scripts/cli/datalake version
+
+# System status check
 ./scripts/cli/datalake status
 
-# View configuration
-./scripts/cli/datalake config
+# Validate configuration
+./scripts/cli/datalake validate
 ```
 
-### Deployment Management
+### Deployment Commands
+
 ```bash
-# Basic deployment
+# Basic deployment (S3, IAM, Glue, Lake Formation)
 ./scripts/cli/datalake deploy
 
-# Individual module deployment
-./scripts/cli/datalake module deploy s3_storage
+# Infrastructure only deployment
+./scripts/cli/datalake infrastructure deploy
 
-# Deployment with EMR
-./scripts/cli/datalake deploy --emr
+# Deploy monitoring modules
+./scripts/cli/datalake monitoring deploy
 
-# Execute analytics job
-./scripts/cli/datalake analytics
+# Full deployment (all modules)
+./scripts/cli/datalake deploy --full
 ```
 
-### Monitoring and Management
-```bash
-# Real-time monitoring
-./scripts/cli/datalake monitoring
+### Module Management
 
-# Cost report
+```bash
+# Individual module operations
+./scripts/cli/datalake module <action> <module_name>
+# actions: validate, deploy, status, cleanup, rollback
+# modules: s3_storage, iam_roles, glue_catalog, lake_formation,
+#          emr_cluster, cost_monitoring, cloudtrail_logging
+
+# Examples:
+./scripts/cli/datalake module deploy s3_storage
+./scripts/cli/datalake module status emr_cluster
+```
+
+### Monitoring & Analytics
+
+```bash
+# Cost analysis
 ./scripts/cli/datalake costs
 
-# Resource validation
-./scripts/cli/datalake validate
+# View CloudTrail logs (past N hours)
+./scripts/cli/datalake logs --hours 1
+
+# Security event analysis
+./scripts/cli/datalake security
+
+# System monitoring
+./scripts/cli/datalake monitoring
+```
+
+### Resource Cleanup
+
+```bash
+# 🆕 Recommended: Use unified CLI
+# Normal deletion (with confirmation)
+./scripts/cli/datalake destroy
+
+# Complete deletion (including S3 version objects)
+./scripts/cli/datalake destroy --force --deep-clean
 ```
 
 ## System Configuration
 
-### 1. Configuration File Structure
-```
-configs/
-├── config.env          # Main configuration template
-├── config.local.env    # Local overrides (gitignored)
-└── env-vars.sh        # Auto-generated environment variables
-```
+### Optimized Modular Architecture
 
-### 2. Key Configuration Items
 ```bash
-# Project settings
-PROJECT_PREFIX=dl-handson    # Resource name prefix
-ENVIRONMENT=dev              # Environment (dev/staging/prod)
-AWS_REGION=us-east-1        # AWS region
-
-# S3 configuration
-S3_VERSIONING=Enabled       # Version control
-S3_LIFECYCLE_ENABLED=true   # Lifecycle management
-
-# EMR configuration
-EMR_INSTANCE_TYPE=m5.xlarge # Instance type
-EMR_INSTANCE_COUNT=3        # Number of instances
+scripts/
+├── cli/
+│   └── datalake                    # Unified CLI management tool v2.0.0
+├── core/                           # Core modules
+│   ├── infrastructure/
+│   │   ├── s3_storage.sh          # S3 storage management
+│   │   └── iam_roles.sh           # IAM role management
+│   ├── catalog/
+│   │   ├── glue_catalog.sh        # Glue data catalog
+│   │   └── lake_formation.sh      # Lake Formation permissions
+│   ├── compute/
+│   │   └── emr_cluster.sh         # EMR cluster management
+│   ├── data_processing/
+│   │   └── ecommerce_analytics.py # E-commerce analytics processing
+│   ├── monitoring/
+│   │   ├── cost_monitoring.sh     # Cost monitoring
+│   │   └── cloudtrail_logging.sh  # Security audit
+│   └── deployment/
+│       └── parallel_orchestrator.sh # Parallel deployment orchestrator
+├── lib/                            # Shared libraries
+│   ├── common.sh                   # Common utilities v2.0.0
+│   ├── config/
+│   │   └── validator.sh           # Configuration validator
+│   ├── interfaces/
+│   │   └── module_interface.sh    # Module interface definitions
+│   └── monitoring/
+│       ├── monitor.sh             # Monitoring functions
+│       └── tracer.py             # Tracing utilities
+└── utils/                          # Utility tools
+    ├── check-resources.sh          # Resource verification
+    ├── delete-s3-versions.py      # S3 version cleanup
+    ├── create_glue_tables.py      # Glue table creation
+    └── table_schemas.json          # Table schema definitions
 ```
 
-### 3. Environment Variable Management
-```bash
-# Load configuration
-source configs/env-vars.sh
+### CloudFormation Templates
 
-# Validate configuration
-./scripts/lib/config/validator.sh
+```bash
+templates/
+├── s3-storage-layer.yaml          # S3 3-tier storage configuration
+├── iam-roles-policies.yaml        # IAM roles and policies
+├── glue-catalog.yaml              # Glue data catalog
+├── lake-formation-simple.yaml     # Simplified Lake Formation
+└── cost-monitoring.yaml           # Cost monitoring setup
 ```
 
 ## Module Details
 
-### 1. Core Infrastructure Module
-- **S3 Storage**: Multi-layer bucket architecture with encryption
-- **IAM Roles**: Least-privilege security policies
-- **VPC Configuration**: Network isolation and security groups
+### 1. S3 Storage Module
+- **Function**: 3-tier data lake storage (Raw/Clean/Analytics)
+- **Bucket Naming**: 
+  - `${PROJECT_PREFIX}-raw-${ENVIRONMENT}`
+  - `${PROJECT_PREFIX}-clean-${ENVIRONMENT}`
+  - `${PROJECT_PREFIX}-analytics-${ENVIRONMENT}`
+- **Features**: Lifecycle management, encryption, versioning
 
-### 2. Data Catalog Module
-- **Glue Database**: Centralized metadata repository
-- **Glue Crawlers**: Automatic schema discovery
-- **Table Definitions**: Structured data catalog
+### 2. IAM Roles Module  
+- **Function**: Role configuration based on least privilege principle
+- **Main Roles**:
+  - GlueServiceRole: For Glue crawler service
+  - EMRServiceRole: For EMR cluster service
+  - LakeFormationServiceRole: For data governance
 
-### 3. Data Processing Module
-- **EMR Cluster**: Managed Spark environment
-- **PySpark Jobs**: Scalable data transformations
-- **Job Orchestration**: Automated workflow management
+### 3. Glue Catalog Module
+- **Function**: Data catalog and metadata management
+- **Database**: `${PROJECT_PREFIX}-db`
+- **Tables**: customers, products, orders, order_items
 
-### 4. Analytics Module
-- **Athena Setup**: Serverless query engine
-- **Query Optimization**: Partitioning and compression
-- **Result Storage**: Query result management
+### 4. Lake Formation Module (Simplified)
+- **Function**: Simplified data permission control
+- **Features**: Service-linked roles, automatic permission configuration
 
-### 5. Monitoring Module
-- **CloudTrail**: Security audit logs
-- **CloudWatch**: Performance metrics
-- **Cost Monitoring**: Budget alerts and optimization
+### 5. EMR Cluster Module
+- **Function**: Spark-based distributed data processing
+- **Cluster Name**: `${PROJECT_PREFIX}-cluster-${ENVIRONMENT}`
+- **Default Config**: Master (m5.xlarge) x 1, Core (m5.xlarge) x 2
+
+### 6. Cost Monitoring Module
+- **Function**: Real-time cost monitoring and budget alerts
+- **Monitored Services**:
+  - Amazon EMR
+  - Amazon S3
+  - AWS Glue
+  - Amazon Athena
+  - AWS Lake Formation
+
+### 7. CloudTrail Logging Module
+- **Function**: Security audit and compliance tracking
+- **Trail Name**: `${PROJECT_PREFIX}-cloudtrail-${ENVIRONMENT}`
+
+### 8. E-commerce Analytics Module 🆕
+- **Function**: Dedicated e-commerce data processing and analytics
+- **Analytics Content**:
+  - Customer behavior analysis
+  - Product sales analysis
+  - Order trend analysis
+  - Revenue reporting
 
 ## Operations Management
 
-### 1. Daily Operations
+### Daily Monitoring
 ```bash
-# Check system health
+# System health check
 ./scripts/cli/datalake status
 
-# View recent activities
-./scripts/cli/datalake logs --hours 24
-
-# Run analytics job
-./scripts/cli/datalake analytics
-```
-
-### 2. Cost Optimization
-```bash
-# Generate cost report
+# Cost monitoring
 ./scripts/cli/datalake costs
 
-# Run cost monitoring script
-./scripts/cost-optimization.sh
-
-# Deploy cost monitoring module
-./scripts/cli/datalake module deploy cost_monitoring
+# Resource usage
+aws s3 ls s3://${PROJECT_PREFIX}-raw-${ENVIRONMENT} --recursive --summarize
 ```
 
-### 3. Security Management
+### Data Analysis Execution
 ```bash
-# Security analysis
-./scripts/cli/datalake security
+# Upload sample data (first time only)
+./scripts/cli/datalake upload --sample-data
 
-# Validate configuration
-./scripts/cli/datalake validate
+# Run Glue crawler
+aws glue start-crawler --name ${PROJECT_PREFIX}-raw-crawler
 
-# Check CloudTrail logs
-./scripts/cli/datalake logs
+# Execute e-commerce analytics
+./scripts/cli/datalake analytics
+
+# Run Athena query
+./scripts/cli/datalake query "SELECT * FROM customers LIMIT 10"
+```
+
+### Data Processing Pipeline
+```bash
+# 1. Data Collection
+aws s3 cp data/ s3://${PROJECT_PREFIX}-raw-${ENVIRONMENT}/landing/ecommerce/ --recursive
+
+# 2. Update Data Catalog
+aws glue start-crawler --name ${PROJECT_PREFIX}-raw-crawler
+
+# 3. Data Cleansing (using DataBrew)
+# Execute DataBrew job via AWS Console or API
+
+# 4. Data Analytics (EMR + Spark)
+./scripts/submit_pyspark_job.sh
+
+# 5. Query Analysis (Athena)
+aws athena start-query-execution \
+  --query-string "SELECT * FROM analytics_db.sales_summary" \
+  --result-configuration "OutputLocation=s3://${PROJECT_PREFIX}-analytics-${ENVIRONMENT}/athena-results/"
 ```
 
 ## Troubleshooting
 
-### Common Issues
+### Common Issues and Solutions
 
-1. **Deployment Failures**
-   ```bash
-   # Check system status
-   ./scripts/cli/datalake status
-   
-   # Retry failed deployments
-   ./scripts/cli/datalake deploy
-   ```
+#### 1. Environment Variable Error
+```bash
+# Issue: "Missing required environment variables"
+# Solution: Load configuration file
+source configs/config.env
+```
 
-2. **Permission Issues**
-   ```bash
-   # Verify configuration
-   ./scripts/cli/datalake validate
-   
-   # Redeploy IAM roles
-   ./scripts/cli/datalake module deploy iam_roles
-   ```
+#### 2. CloudFormation Stack Error
+```bash
+# Issue: "Stack already exists"
+# Solution: Delete existing stack and redeploy
+aws cloudformation delete-stack --stack-name <stack-name>
+aws cloudformation wait stack-delete-complete --stack-name <stack-name>
+```
 
-3. **EMR Cluster Issues**
-   ```bash
-   # Check EMR cluster status
-   ./scripts/cli/datalake module status emr_cluster
-   
-   # Redeploy EMR cluster
-   ./scripts/cli/datalake module deploy emr_cluster
-   ```
+#### 3. EMR Cluster Connection Error
+```bash
+# Issue: "Cannot connect to EMR cluster"
+# Solution: Check security groups and key pairs
+./scripts/cli/datalake module status emr_cluster
+```
+
+#### 4. Cost Monitoring Deployment Error
+```bash
+# Issue: "Budget creation failed"
+# Solution: CostFilters in cost-monitoring.yaml has been fixed
+# Updated to use Service dimension filters
+```
+
+#### 5. Permission Denied Error
+```bash
+# Issue: "Access Denied"
+# Solution: Check IAM roles and Lake Formation permissions
+./scripts/cli/datalake module deploy iam_roles
+./scripts/cli/datalake module deploy lake_formation
+```
 
 ### Debug Mode
 ```bash
-# Enable debug logging
+# Enable detailed logging
+export DEBUG=true
 export LOG_LEVEL=DEBUG
 
-# Run deployment
-./scripts/cli/datalake deploy
+# Run in debug mode
+./scripts/cli/datalake status
+
+# View module logs
+tail -f logs/datalake-*.log
 ```
 
-## Project Structure
-```
-aws-datalake-handson/
-├── scripts/              # Deployment and management scripts
-│   ├── cli/
-│   │   └── datalake     # 🆕 Unified CLI entry point (RECOMMENDED)
-│   ├── deploy-all.sh    # Legacy deployment script (fallback only)
-│   ├── core/           # Core modules
-│   ├── lib/            # Shared libraries
-│   └── utils/          # Utility scripts
-├── templates/           # CloudFormation templates
-├── configs/            # Configuration files
-├── sample-data/        # Sample datasets
-└── docs/              # Documentation
-```
+## Estimated Costs and Recommendations
 
-### 🔄 Migration from Legacy Scripts
-If you're upgrading from an older version:
+### Monthly Cost Estimation (Tokyo Region)
+- **Basic Configuration (without EMR)**: $5-15/month
+- **Configuration with EMR**: $50-200/month (depends on usage)
+- **Storage**: $1-5/month (depends on data volume)
 
-**New Way** (v2.1+, **Recommended**):
-```bash
-# Deployment
-./scripts/cli/datalake deploy --full
-# Cost monitoring
-./scripts/cli/datalake costs
-```
+### Cost Optimization Tips
+1. Delete EMR clusters immediately after use
+2. Leverage S3 lifecycle policies (automatically configured)
+3. Use Spot instances to reduce EMR costs by 60-70%
+4. Regularly review cost monitoring reports
+5. Use parallel deployment orchestrator to reduce deployment time
 
-## Best Practices
+## Security Best Practices
 
-1. **Security**
-   - Use IAM roles instead of access keys
-   - Enable S3 bucket encryption
-   - Implement least-privilege access
-   - Regular security audits
+- IAM roles follow the principle of least privilege
+- S3 buckets have encryption and versioning enabled
+- Lake Formation provides fine-grained access control
+- CloudTrail records all operation audit logs
+- VPC endpoints recommended for enhanced security
+- Regular security event analysis
+- Automatic data masking for sensitive information
 
-2. **Cost Optimization**
-   - Use spot instances for EMR
-   - Implement S3 lifecycle policies
-   - Monitor and set budget alerts
-   - Regular resource cleanup with CloudFormation
+## Project Features
 
-3. **Performance**
-   - Partition data appropriately
-   - Use columnar formats (Parquet)
-   - Optimize Spark configurations
-   - Implement data compression
+### 🎯 Core Advantages
+1. **Modular Design**: Each component can be deployed independently
+2. **Parallel Deployment**: Intelligent dependency resolution for faster deployment
+3. **E-commerce Scenario**: Built-in e-commerce data model and analytics examples
+4. **Chinese Support**: Complete Chinese comments and documentation in code
+5. **Cost Optimization**: Automated cost monitoring and optimization recommendations
 
-4. **Reliability**
-   - Implement retry mechanisms
-   - Use CloudFormation for IaC
-   - Regular backups
-   - Monitoring and alerting
+### 📊 Data Model
+- **Customers Table**: Customer profile information
+- **Products Table**: Product catalog data
+- **Orders Table**: Order transaction records
+- **Order Items Table**: Order item details
 
-## Contributing
+## Data Processing Pipeline Details
 
-Contributions are welcome! Please read our contributing guidelines and submit pull requests to our repository.
+| 🏷️ **Stage** | 📂 **Layer** | 📝 **Description** | 💾 **Storage** | 🔧 **Processing Tools** | ⏱️ **Frequency** |
+|:---:|:---:|:---|:---|:---|:---:|
+| **1️⃣ Collection** | Raw<br/>(Bronze) | Collect raw data from various sources | `s3://dl-handson-v2-raw-dev/`<br/>`└── landing/`<br/>`    └── ecommerce/` | S3 Transfer<br/>Kinesis Firehose | Real-time |
+| **2️⃣ Validation** | Raw → Clean | Schema discovery and data quality checks | Glue Data Catalog | Glue Crawler<br/>Data Quality | Hourly |
+| **3️⃣ Transformation** | Clean<br/>(Silver) | Data cleansing, normalization, deduplication | `s3://dl-handson-v2-clean-dev/`<br/>`└── processed/`<br/>`    └── ecommerce/` | Glue DataBrew<br/>Glue ETL | Daily |
+| **4️⃣ Aggregation** | Analytics<br/>(Gold) | Business metrics calculation, KPI generation | `s3://dl-handson-v2-analytics-dev/`<br/>`└── aggregated/`<br/>`    └── reports/` | EMR Spark<br/>PySpark Job | Daily/Weekly |
+| **5️⃣ Analysis** | Query Layer | Ad-hoc analysis and report generation | Athena Query Results | Amazon Athena<br/>QuickSight | On-demand |
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For issues and questions:
-- GitHub Issues: [Project Issues](https://github.com/yourusername/aws-datalake-handson/issues)
-- Documentation: [Project Wiki](https://github.com/yourusername/aws-datalake-handson/wiki)
+This project is licensed under the MIT License.
 
 ---
 **Author**: mayinchen  
 **Version**: 2.1  
-**Last Updated**: 2025.7
+**Last Updated**: July 2025
+
+**Important**: This project is created for learning purposes. Please thoroughly validate security and cost configurations before using in production.
+
+**Leverage the optimized features of v2.1 to achieve efficient data lake management!**
