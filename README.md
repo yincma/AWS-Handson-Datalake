@@ -306,7 +306,7 @@ echo "ENVIRONMENT=$ENVIRONMENT"        # dev
 
 ### 最適化されたモジュール構成
 
-```
+```bash
 scripts/
 ├── cli/
 │   └── datalake                    # 統一CLI管理ツール v2.0.0
@@ -343,7 +343,7 @@ scripts/
 
 ### CloudFormationテンプレート
 
-```
+```bash
 templates/
 ├── s3-storage-layer.yaml          # S3 3層ストレージ設定
 ├── iam-roles-policies.yaml        # IAMロールとポリシー
@@ -499,7 +499,7 @@ export LOG_LEVEL=DEBUG
 
 **Author**: mayinchen  
 **Version**: 2.1  
-**Last Updated**: 2025
+**Last Updated**: 2025.7
 
 **重要**: このプロジェクトは学習目的で作成されています。本番環境で使用する前に、セキュリティとコスト設定を十分に確認してください。
 
