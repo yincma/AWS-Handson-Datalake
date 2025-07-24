@@ -221,8 +221,6 @@ echo "ENVIRONMENT=$ENVIRONMENT"        # dev
 # EMRクラスターと分析ジョブを含む完全デプロイ
 ./scripts/cli/datalake deploy --full
 
-# Legacy script (fallback only)
-# ./scripts/deploy-all.sh --with-emr --with-analytics
 ```
 
 ### 5. システム確認
@@ -306,10 +304,6 @@ echo "ENVIRONMENT=$ENVIRONMENT"        # dev
 
 # 完全削除（S3バージョンオブジェクトも削除）
 ./scripts/cli/datalake destroy --force --deep-clean
-
-# 従来のスクリプト（フォールバックのみ）
-# ./scripts/cleanup.sh --force --deep-clean --retry-failed
-```
 
 ## システム構成
 
@@ -492,20 +486,6 @@ export LOG_LEVEL=DEBUG
 3. Spotインスタンスの使用でEMRコストを60-70%削減
 4. 定期的なコスト監視レポートの確認
 
-### 学習後のクリーンアップ
-```bash
-# 🆕 推奨: 統一CLIを使用
-# 完全削除（全リソースとデータを削除）
-./scripts/cli/datalake destroy --force --deep-clean
-
-# システム状態の確認
-./scripts/cli/datalake status
-
-# 従来の方法（フォールバックのみ）
-# ./scripts/cleanup.sh --force --deep-clean --retry-failed
-# ./scripts/utils/check-resources.sh
-```
-
 ## セキュリティベストプラクティス
 
 - IAMロールは最小権限の原則に従って設定
@@ -522,7 +502,7 @@ export LOG_LEVEL=DEBUG
 
 **Author**: mayinchen  
 **Version**: 2.1  
-**Last Updated**: 2024
+**Last Updated**: 2025
 
 **重要**: このプロジェクトは学習目的で作成されています。本番環境で使用する前に、セキュリティとコスト設定を十分に確認してください。
 
