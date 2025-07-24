@@ -153,13 +153,13 @@ echo "=========================================="
 
 if [[ $found_buckets -gt 0 ]] || [[ $found_stacks -gt 0 ]]; then
     print_warning "Found remaining resources. Run cleanup script to remove them:"
-    echo "./scripts/cleanup.sh --force"
+    echo "./scripts/cli/datalake destroy --force"
     echo
     echo "For stuck resources (DELETE_FAILED stacks), use:"
-    echo "./scripts/cleanup.sh --force --retry-failed"
+    echo "./scripts/cli/datalake destroy --force --retry-failed"
     echo
     echo "For deep clean (including S3 versions), use:"
-    echo "./scripts/cleanup.sh --force --deep-clean"
+    echo "./scripts/cli/datalake destroy --force --deep-clean"
 else
     print_success "No data lake resources found. Environment is clean!"
 fi
