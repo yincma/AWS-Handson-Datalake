@@ -1,101 +1,102 @@
-# AWS 数据湖综合实践项目 v2.1
+# AWS データレイク総合実践プロジェクト v2.1
 
 **作者: mayinchen**
 
-## 项目概述
+## プロジェクト概要
 
-本项目是一个基于AWS云服务构建企业级数据湖平台的实践性动手项目。**v2.1版本提供了优化的模块化架构和统一的CLI管理系统。**
+本プロジェクトは、AWSクラウドサービスを基盤としたエンタープライズレベルのデータレイクプラットフォームをゼロから構築するための実践的なハンズオンプロジェクトです。**v2.1では最適化されたモジュラーアーキテクチャと統一されたCLI管理システムを提供します。**
 
-通过多层架构设计（Raw → Clean → Analytics），实现了数据收集、存储、转换和分析的完整数据处理流水线。
+多層アーキテクチャ設計（Raw → Clean → Analytics）により、データの収集、保存、変換、分析の完全なデータ処理パイプラインを実現しています。
 
-## 🆕 v2.1 新功能亮点
+## 🆕 v2.1 新機能ハイライト
 
-- **统一CLI管理**: 通过 `datalake` 命令实现集中化系统管理
-- **模块化架构**: 高度独立的组件设计和并行部署编排器
-- **简化配置**: 使用Lake Formation Simple模式简化权限管理
-- **企业级可靠性**: 全面的错误处理和重试逻辑
-- **高级监控功能**: CloudTrail集成安全监控和成本优化
-- **自动化部署**: 基于依赖关系的智能资源管理
-- **电商数据分析**: 专门的电商数据处理和分析模块
+- **統一CLI管理**: `datalake` コマンドによる一元化されたシステム管理
+- **モジュラーアーキテクチャ**: 高度に独立したコンポーネント設計と並列デプロイメントオーケストレーター
+- **簡素化された設定**: Lake Formation Simpleモードによる権限管理の簡易化
+- **エンタープライズレベルの信頼性**: 包括的なエラーハンドリングとリトライロジック
+- **高度な監視機能**: CloudTrail統合セキュリティ監視とコスト最適化
+- **自動化されたデプロイ**: 依存関係を考慮したインテリジェントなリソース管理
+- **Eコマース分析**: 専用のEコマースデータ処理・分析モジュール
+- **並列オーケストレーション**: インテリジェントな並列実行によるデプロイ時間の最適化
 
-## 目录
-- [技术架构](#技术架构)
-- [前置条件](#前置条件)
-- [快速开始](#快速开始)
-- [统一CLI使用指南](#统一cli使用指南)
-- [系统配置](#系统配置)
-- [模块详情](#模块详情)
-- [运维管理](#运维管理)
-- [故障排除](#故障排除)
+## 目次
+- [技術アーキテクチャ](#技術アーキテクチャ)
+- [前提条件](#前提条件)
+- [クイックスタート](#クイックスタート)
+- [統一CLI使用ガイド](#統一cli使用ガイド)
+- [システム構成](#システム構成)
+- [モジュール詳細](#モジュール詳細)
+- [運用管理](#運用管理)
+- [トラブルシューティング](#トラブルシューティング)
 
-## 技术架构
+## 技術アーキテクチャ
 
 ![AWS Data Lake Architecture](./Arch.drawio.svg)
 
-### 核心服务栈
-- **存储层**: Amazon S3 (三层存储 + 生命周期管理)
-- **数据目录**: AWS Glue (Crawler + 数据目录)
-- **数据治理**: AWS Lake Formation (简化权限控制)
-- **计算引擎**: Amazon EMR (Spark分布式处理)
-- **分析引擎**: Amazon Athena (无服务器SQL查询)
-- **监控与成本管理**: CloudTrail + AWS Budgets + CloudWatch
+### コアサービススタック
+- **ストレージ層**: Amazon S3 (3層ストレージ + ライフサイクル管理)
+- **データカタログ**: AWS Glue (Crawler + データカタログ)
+- **データガバナンス**: AWS Lake Formation (簡素化された権限制御)
+- **計算エンジン**: Amazon EMR (Spark分散処理)
+- **分析エンジン**: Amazon Athena (サーバーレス SQL クエリ)
+- **監視・コスト管理**: CloudTrail + AWS Budgets + CloudWatch
 
-### 数据流架构
+### データフローアーキテクチャ
 
 <div align="center">
 
-#### 🌊 **数据湖三层架构**
+#### 🌊 **データレイク3層アーキテクチャ**
 
 </div>
 
 ```mermaid
 graph TB
-    %% 样式定义
+    %% スタイル定義
     classDef rawStyle fill:#FFE5CC,stroke:#FF8C42,stroke-width:3px,color:#000
     classDef cleanStyle fill:#CCE5FF,stroke:#4285F4,stroke-width:3px,color:#000
     classDef analyticsStyle fill:#D4EDDA,stroke:#28A745,stroke-width:3px,color:#000
     classDef catalogStyle fill:#F8F9FA,stroke:#6C757D,stroke-width:2px,color:#000
     classDef processStyle fill:#E7E7E7,stroke:#495057,stroke-width:2px,color:#000
     
-    %% 数据源
-    subgraph sources["📥 数据源"]
-        DS1[CSV文件]
-        DS2[JSON文件]
-        DS3[日志文件]
+    %% データソース
+    subgraph sources["📥 データソース"]
+        DS1[CSVファイル]
+        DS2[JSONファイル]
+        DS3[ログファイル]
     end
     
-    %% 存储层
-    subgraph storage["🗄️ 存储层"]
-        RAW["🥉 原始层 (Bronze)<br/>原始数据存储<br/>S3: dl-handson-v2-raw-dev"]:::rawStyle
-        CLEAN["🥈 清洁层 (Silver)<br/>清洗后数据<br/>S3: dl-handson-v2-clean-dev"]:::cleanStyle
-        ANALYTICS["🥇 分析层 (Gold)<br/>分析聚合数据<br/>S3: dl-handson-v2-analytics-dev"]:::analyticsStyle
+    %% ストレージ層
+    subgraph storage["🗄️ ストレージ層"]
+        RAW["🥉 Raw層 (Bronze)<br/>生データ保存<br/>S3: dl-handson-v2-raw-dev"]:::rawStyle
+        CLEAN["🥈 Clean層 (Silver)<br/>クレンジング済みデータ<br/>S3: dl-handson-v2-clean-dev"]:::cleanStyle
+        ANALYTICS["🥇 Analytics層 (Gold)<br/>分析用集計データ<br/>S3: dl-handson-v2-analytics-dev"]:::analyticsStyle
     end
     
-    %% 目录层
-    CATALOG["📚 AWS Glue 数据目录<br/>统一元数据管理"]:::catalogStyle
+    %% カタログ層
+    CATALOG["📚 AWS Glue データカタログ<br/>統合メタデータ管理"]:::catalogStyle
     
-    %% 处理层
-    subgraph processing["⚙️ 处理与分析"]
-        CRAWLER["🔍 Glue 爬虫<br/>自动schema发现"]:::processStyle
-        DATABREW["🧹 Glue DataBrew<br/>数据清洗"]:::processStyle
-        EMR["⚡ EMR + Spark<br/>大规模数据处理"]:::processStyle
-        ATHENA["📊 Amazon Athena<br/>SQL查询分析"]:::processStyle
+    %% 処理層
+    subgraph processing["⚙️ 処理と分析"]
+        CRAWLER["🔍 Glue Crawler<br/>自動スキーマ検出"]:::processStyle
+        DATABREW["🧹 Glue DataBrew<br/>データクレンジング"]:::processStyle
+        EMR["⚡ EMR + Spark<br/>大規模データ処理"]:::processStyle
+        ATHENA["📊 Amazon Athena<br/>SQLクエリ分析"]:::processStyle
     end
     
-    %% 治理
-    LAKEFORMATION["🛡️ Lake Formation<br/>访问权限管理"]:::processStyle
+    %% ガバナンス
+    LAKEFORMATION["🛡️ Lake Formation<br/>アクセス権限管理"]:::processStyle
     
-    %% 数据流
+    %% データフロー
     DS1 --> RAW
     DS2 --> RAW
     DS3 --> RAW
     
-    RAW -->|ETL处理| CLEAN
-    CLEAN -->|转换·聚合| ANALYTICS
+    RAW -->|ETL処理| CLEAN
+    CLEAN -->|変換・集計| ANALYTICS
     
-    RAW -.->|元数据注册| CATALOG
-    CLEAN -.->|元数据注册| CATALOG
-    ANALYTICS -.->|元数据注册| CATALOG
+    RAW -.->|メタデータ登録| CATALOG
+    CLEAN -.->|メタデータ登録| CATALOG
+    ANALYTICS -.->|メタデータ登録| CATALOG
     
     CATALOG <--> CRAWLER
     CATALOG <--> DATABREW
@@ -104,29 +105,29 @@ graph TB
     
     CATALOG <--> LAKEFORMATION
     
-    %% 注释
-    RAW -.- crawlerNote["定期<br/>自动扫描"]
-    CLEAN -.- databrewNote["数据质量<br/>规则应用"]
-    ANALYTICS -.- emrNote["业务<br/>逻辑执行"]
+    %% 注釈
+    RAW -.- crawlerNote["定期的に<br/>自動スキャン"]
+    CLEAN -.- databrewNote["データ品質<br/>ルール適用"]
+    ANALYTICS -.- emrNote["ビジネス<br/>ロジック実行"]
 ```
 
 <div align="center">
 
-#### 📋 **数据处理流水线详情**
+#### 📋 **データ処理パイプライン詳細**
 
 </div>
 
-| 🏷️ **阶段** | 📂 **层级** | 📝 **说明** | 💾 **存储** | 🔧 **处理工具** | ⏱️ **频率** |
+| 🏷️ **ステージ** | 📂 **レイヤー** | 📝 **説明** | 💾 **ストレージ** | 🔧 **処理ツール** | ⏱️ **頻度** |
 |:---:|:---:|:---|:---|:---|:---:|
-| **1️⃣ 采集** | 原始层<br/>(Bronze) | 从各种数据源收集原始数据 | `s3://dl-handson-v2-raw-dev/`<br/>`└── landing/`<br/>`    └── ecommerce/` | S3 Transfer<br/>Kinesis Firehose | 实时 |
-| **2️⃣ 验证** | 原始层 → 清洁层 | Schema发现和数据质量检查 | Glue Data Catalog | Glue Crawler<br/>Data Quality | 每小时 |
-| **3️⃣ 转换** | 清洁层<br/>(Silver) | 数据清洗、标准化、去重 | `s3://dl-handson-v2-clean-dev/`<br/>`└── processed/`<br/>`    └── ecommerce/` | Glue DataBrew<br/>Glue ETL | 每日 |
-| **4️⃣ 聚合** | 分析层<br/>(Gold) | 业务指标计算、KPI生成 | `s3://dl-handson-v2-analytics-dev/`<br/>`└── aggregated/`<br/>`    └── reports/` | EMR Spark<br/>PySpark Job | 每日/每周 |
-| **5️⃣ 分析** | 查询层 | 即席分析和报表生成 | Athena Query Results | Amazon Athena<br/>QuickSight | 按需 |
+| **1️⃣ 収集** | Raw<br/>(Bronze) | 様々なソースからの生データをそのまま保存 | `s3://dl-handson-v2-raw-dev/`<br/>`└── landing/`<br/>`    └── ecommerce/` | S3 Transfer<br/>Kinesis Firehose | リアルタイム |
+| **2️⃣ 検証** | Raw → Clean | スキーマ検出とデータ品質チェック | Glue Data Catalog | Glue Crawler<br/>Data Quality | 1時間毎 |
+| **3️⃣ 変換** | Clean<br/>(Silver) | データクレンジング、正規化、重複排除 | `s3://dl-handson-v2-clean-dev/`<br/>`└── processed/`<br/>`    └── ecommerce/` | Glue DataBrew<br/>Glue ETL | 日次 |
+| **4️⃣ 集計** | Analytics<br/>(Gold) | ビジネスメトリクス計算、KPI生成 | `s3://dl-handson-v2-analytics-dev/`<br/>`└── aggregated/`<br/>`    └── reports/` | EMR Spark<br/>PySpark Job | 日次/週次 |
+| **5️⃣ 分析** | Query Layer | アドホック分析とレポート作成 | Athena Query Results | Amazon Athena<br/>QuickSight | オンデマンド |
 
 <div align="center">
 
-#### 🎯 **主要组件详情**
+#### 🎯 **主要コンポーネントの詳細**
 
 </div>
 
@@ -134,24 +135,24 @@ graph TB
 <tr>
 <td width="50%">
 
-**📊 数据管理组件**
+**📊 データ管理コンポーネント**
 
-| 组件 | 功能 |
+| コンポーネント | 役割 |
 |:---|:---|
-| 🔍 **Glue 爬虫** | • 自动发现新数据<br/>• 自动推断Schema<br/>• 分区管理 |
-| 📚 **Glue 数据目录** | • 统一元数据存储<br/>• 表定义管理<br/>• 数据血缘追踪 |
-| 🛡️ **Lake Formation** | • 细粒度访问控制<br/>• 数据脱敏<br/>• 审计日志管理 |
+| 🔍 **Glue Crawler** | • 新規データの自動検出<br/>• スキーマの自動推論<br/>• パーティション管理 |
+| 📚 **Glue Data Catalog** | • 統一メタデータストア<br/>• テーブル定義管理<br/>• データ系譜追跡 |
+| 🛡️ **Lake Formation** | • 細粒度アクセス制御<br/>• データマスキング<br/>• 監査ログ管理 |
 
 </td>
 <td width="50%">
 
-**⚡ 处理与分析组件**
+**⚡ 処理・分析コンポーネント**
 
-| 组件 | 功能 |
+| コンポーネント | 役割 |
 |:---|:---|
-| 🧹 **Glue DataBrew** | • 可视化数据准备<br/>• 250+转换功能<br/>• 数据画像分析 |
-| ⚡ **EMR + Spark** | • 大规模并行处理<br/>• 机器学习管道<br/>• 流式处理 |
-| 📊 **Amazon Athena** | • 无服务器SQL分析<br/>• 标准SQL兼容<br/>• 结果缓存功能 |
+| 🧹 **Glue DataBrew** | • ビジュアルデータ準備<br/>• 250+の変換機能<br/>• データプロファイリング |
+| ⚡ **EMR + Spark** | • 大規模並列処理<br/>• 機械学習パイプライン<br/>• ストリーミング処理 |
+| 📊 **Amazon Athena** | • サーバーレスSQL分析<br/>• 標準SQL準拠<br/>• 結果キャッシュ機能 |
 
 </td>
 </tr>
@@ -159,21 +160,21 @@ graph TB
 
 <div align="center">
 
-#### 🔄 **数据生命周期管理**
+#### 🔄 **データライフサイクル管理**
 
 </div>
 
 ```mermaid
 graph LR
-    subgraph lifecycle["📅 S3生命周期策略"]
-        HOT["🔥 热数据<br/>0-30天<br/>Standard"]
-        WARM["🌡️ 温数据<br/>31-90天<br/>Standard-IA"]
-        COLD["❄️ 冷数据<br/>91-365天<br/>Glacier IR"]
-        ARCHIVE["🗄️ 归档<br/>365天+<br/>Deep Archive"]
+    subgraph lifecycle["📅 S3ライフサイクルポリシー"]
+        HOT["🔥 ホット<br/>0-30日<br/>Standard"]
+        WARM["🌡️ ウォーム<br/>31-90日<br/>Standard-IA"]
+        COLD["❄️ コールド<br/>91-365日<br/>Glacier IR"]
+        ARCHIVE["🗄️ アーカイブ<br/>365日+<br/>Deep Archive"]
         
-        HOT -->|30天后| WARM
-        WARM -->|90天后| COLD
-        COLD -->|365天后| ARCHIVE
+        HOT -->|30日後| WARM
+        WARM -->|90日後| COLD
+        COLD -->|365日後| ARCHIVE
     end
     
     style HOT fill:#FFE5CC,stroke:#FF8C42
@@ -182,387 +183,387 @@ graph LR
     style ARCHIVE fill:#E7E7E7,stroke:#6C757D
 ```
 
-## 前置条件
+## 前提条件
 
-- AWS CLI已安装
-- AWS认证信息已配置 (`aws configure`)
-- Bash 4.0或更高版本
-- Python 3.8或更高版本（用于EMR分析任务）
-- 适当的IAM权限（推荐管理员权限）
+- AWS CLIがインストール済み
+- AWS認証情報が設定済み (`aws configure`)
+- Bash 4.0以上
+- Python 3.8以上（EMR分析ジョブ用）
+- 適切なIAM権限（管理者権限推奨）
 
-## 快速开始
+## クイックスタート
 
-### 1. 环境准备
+### 1. 環境準備
 ```bash
-# 进入项目目录
+# プロジェクトディレクトリに移動
 cd /Users/umatoratatsu/Documents/AWS/AWS-Handson/Datalake/git
 
-# 自定义配置文件（可选）
+# 設定ファイルをカスタマイズ（オプション）
 cp configs/config.env configs/config.local.env
-# 编辑config.local.env调整项目配置
+# config.local.envを編集してプロジェクト設定を調整
 ```
 
-### 2. 环境变量设置
+### 2. 環境変数の設定
 ```bash
-# 加载配置文件
+# 設定ファイルを読み込む
 source configs/config.env
 
-# 确认环境变量
+# 環境変数を確認
 echo "PROJECT_PREFIX=$PROJECT_PREFIX"  # dl-handson-v2
 echo "ENVIRONMENT=$ENVIRONMENT"        # dev
 ```
 
-### 3. 基础部署
+### 3. 基本デプロイメント
 ```bash
-# 仅部署基础架构
+# 基本インフラストラクチャのみデプロイ
 ./scripts/cli/datalake deploy
 ```
 
-### 4. 完整部署（包含EMR + 分析）
+### 4. 完全デプロイメント（EMR + Analytics）
 ```bash
-# 包含EMR集群和分析任务的完整部署
+# EMRクラスターと分析ジョブを含む完全デプロイ
 ./scripts/cli/datalake deploy --full
 ```
 
-### 5. 系统验证
+### 5. システム確認
 ```bash
-# 检查系统整体状态
+# システム全体の状態確認
 ./scripts/cli/datalake status
 
-# 验证已部署的资源
+# デプロイされたリソースの確認
 ./scripts/utils/check-resources.sh
 ```
 
-## 统一CLI使用指南
+## 統一CLI使用ガイド
 
-### 基础命令
+### 基本コマンド
 
 ```bash
-# 显示帮助
+# ヘルプ表示
 ./scripts/cli/datalake help
 
-# 查看版本
+# バージョン確認
 ./scripts/cli/datalake version
 
-# 检查系统状态
+# システム状態確認
 ./scripts/cli/datalake status
 
-# 验证配置
+# 設定検証
 ./scripts/cli/datalake validate
 ```
 
-### 部署命令
+### デプロイメントコマンド
 
 ```bash
-# 基础部署（S3、IAM、Glue、Lake Formation）
+# 基本デプロイ（S3、IAM、Glue、Lake Formation）
 ./scripts/cli/datalake deploy
 
-# 仅部署基础设施
+# インフラストラクチャのみデプロイ
 ./scripts/cli/datalake infrastructure deploy
 
-# 部署监控模块
+# 監視モジュールのデプロイ
 ./scripts/cli/datalake monitoring deploy
 
-# 完整部署（所有模块）
+# 完全デプロイ（全モジュール）
 ./scripts/cli/datalake deploy --full
 ```
 
-### 模块管理
+### モジュール管理
 
 ```bash
-# 单个模块操作
+# 個別モジュールの操作
 ./scripts/cli/datalake module <action> <module_name>
 # actions: validate, deploy, status, cleanup, rollback
 # modules: s3_storage, iam_roles, glue_catalog, lake_formation,
 #          emr_cluster, cost_monitoring, cloudtrail_logging
 
-# 示例：
+# 例：
 ./scripts/cli/datalake module deploy s3_storage
 ./scripts/cli/datalake module status emr_cluster
 ```
 
-### 监控与分析
+### 監視・分析
 
 ```bash
-# 成本分析
+# コスト分析
 ./scripts/cli/datalake costs
 
-# 查看CloudTrail日志（过去N小时）
+# CloudTrailログ確認（過去N時間）
 ./scripts/cli/datalake logs --hours 1
 
-# 安全事件分析
+# セキュリティイベント分析
 ./scripts/cli/datalake security
 
-# 系统监控
+# システム監視
 ./scripts/cli/datalake monitoring
 ```
 
-### 清理资源
+### クリーンアップ
 
 ```bash
-# 🆕 推荐：使用统一CLI
-# 普通删除（带确认提示）
+# 🆕 推奨: 統一CLIを使用
+# 通常削除（確認プロンプト付き）
 ./scripts/cli/datalake destroy
 
-# 完全删除（包括S3版本对象）
+# 完全削除（S3バージョンオブジェクトも削除）
 ./scripts/cli/datalake destroy --force --deep-clean
 ```
 
-## 系统配置
+## システム構成
 
-### 优化的模块化结构
+### 最適化されたモジュール構成
 
 ```bash
 scripts/
 ├── cli/
-│   └── datalake                    # 统一CLI管理工具 v2.0.0
-├── core/                           # 核心模块
+│   └── datalake                    # 統一CLI管理ツール v2.0.0
+├── core/                           # コアモジュール
 │   ├── infrastructure/
-│   │   ├── s3_storage.sh          # S3存储管理
-│   │   └── iam_roles.sh           # IAM角色管理
+│   │   ├── s3_storage.sh          # S3ストレージ管理
+│   │   └── iam_roles.sh           # IAMロール管理
 │   ├── catalog/
-│   │   ├── glue_catalog.sh        # Glue数据目录
-│   │   └── lake_formation.sh      # Lake Formation权限管理
+│   │   ├── glue_catalog.sh        # Glueデータカタログ
+│   │   └── lake_formation.sh      # Lake Formation権限管理
 │   ├── compute/
-│   │   └── emr_cluster.sh         # EMR集群管理
+│   │   └── emr_cluster.sh         # EMRクラスター管理
 │   ├── data_processing/
-│   │   └── ecommerce_analytics.py # 电商数据分析处理
+│   │   └── ecommerce_analytics.py # Eコマース分析処理
 │   ├── monitoring/
-│   │   ├── cost_monitoring.sh     # 成本监控
-│   │   └── cloudtrail_logging.sh  # 安全审计
+│   │   ├── cost_monitoring.sh     # コスト監視
+│   │   └── cloudtrail_logging.sh  # セキュリティ監査
 │   └── deployment/
-│       └── parallel_orchestrator.sh # 并行部署编排器
-├── lib/                            # 共享库
-│   ├── common.sh                   # 通用工具函数 v2.0.0
+│       └── parallel_orchestrator.sh # 並列デプロイオーケストレーター
+├── lib/                            # 共有ライブラリ
+│   ├── common.sh                   # 共通ユーティリティ v2.0.0
 │   ├── config/
-│   │   └── validator.sh           # 配置验证器
+│   │   └── validator.sh           # 設定検証
 │   ├── interfaces/
-│   │   └── module_interface.sh    # 模块接口定义
+│   │   └── module_interface.sh    # モジュールインターフェース
 │   └── monitoring/
-│       ├── monitor.sh             # 监控功能
-│       └── tracer.py             # 追踪功能
-└── utils/                          # 实用工具
-    ├── check-resources.sh          # 资源检查
-    ├── delete-s3-versions.py      # S3版本删除
-    ├── create_glue_tables.py      # 创建Glue表
-    └── table_schemas.json          # 表结构定义
+│       ├── monitor.sh             # 監視機能
+│       └── tracer.py             # トレース機能
+└── utils/                          # ユーティリティツール
+    ├── check-resources.sh          # リソース確認
+    ├── delete-s3-versions.py      # S3バージョン削除
+    ├── create_glue_tables.py      # Glueテーブル作成
+    └── table_schemas.json          # テーブルスキーマ定義
 ```
 
-### CloudFormation模板
+### CloudFormationテンプレート
 
 ```bash
 templates/
-├── s3-storage-layer.yaml          # S3三层存储配置
-├── iam-roles-policies.yaml        # IAM角色和策略
-├── glue-catalog.yaml              # Glue数据目录
-├── lake-formation-simple.yaml     # 简化版Lake Formation
-└── cost-monitoring.yaml           # 成本监控配置
+├── s3-storage-layer.yaml          # S3 3層ストレージ設定
+├── iam-roles-policies.yaml        # IAMロールとポリシー
+├── glue-catalog.yaml              # Glueデータカタログ
+├── lake-formation-simple.yaml     # 簡素化Lake Formation
+└── cost-monitoring.yaml           # コスト監視設定
 ```
 
-## 模块详情
+## モジュール詳細
 
-### 1. S3存储模块
-- **功能**: 三层数据湖存储（Raw/Clean/Analytics）
-- **存储桶命名**: 
+### 1. S3 Storage Module
+- **機能**: 3層データレイクストレージ（Raw/Clean/Analytics）
+- **バケット名**: 
   - `${PROJECT_PREFIX}-raw-${ENVIRONMENT}`
   - `${PROJECT_PREFIX}-clean-${ENVIRONMENT}`
   - `${PROJECT_PREFIX}-analytics-${ENVIRONMENT}`
-- **特性**: 生命周期管理、加密、版本控制
+- **特徴**: ライフサイクル管理、暗号化、バージョニング対応
 
-### 2. IAM角色模块  
-- **功能**: 基于最小权限原则的角色配置
-- **主要角色**:
-  - GlueServiceRole: Glue爬虫服务角色
-  - EMRServiceRole: EMR集群服务角色
-  - LakeFormationServiceRole: 数据治理服务角色
+### 2. IAM Roles Module  
+- **機能**: 最小権限の原則に基づくロール設定
+- **主要ロール**:
+  - GlueServiceRole: Glueクローラー用
+  - EMRServiceRole: EMRクラスター用
+  - LakeFormationServiceRole: データガバナンス用
 
-### 3. Glue数据目录模块
-- **功能**: 数据目录和元数据管理
-- **数据库**: `${PROJECT_PREFIX}-db`
-- **数据表**: customers, products, orders, order_items
+### 3. Glue Catalog Module
+- **機能**: データカタログとメタデータ管理
+- **データベース**: `${PROJECT_PREFIX}-db`
+- **テーブル**: customers, products, orders, order_items
 
-### 4. Lake Formation模块（简化版）
-- **功能**: 简化的数据权限控制
-- **特性**: 服务联动角色、自动权限配置
+### 4. Lake Formation Module (Simplified)
+- **機能**: 簡素化されたデータ権限制御
+- **特徴**: サービス連携ロール使用、自動権限設定
 
-### 5. EMR集群模块
-- **功能**: 基于Spark的分布式数据处理
-- **集群名称**: `${PROJECT_PREFIX}-cluster-${ENVIRONMENT}`
-- **默认配置**: Master (m5.xlarge) x 1, Core (m5.xlarge) x 2
+### 5. EMR Cluster Module
+- **機能**: Sparkベースの分散データ処理
+- **クラスター名**: `${PROJECT_PREFIX}-cluster-${ENVIRONMENT}`
+- **デフォルト構成**: Master (m5.xlarge) x 1, Core (m5.xlarge) x 2
 
-### 6. 成本监控模块
-- **功能**: 实时成本监控和预算告警
-- **监控服务**:
+### 6. Cost Monitoring Module
+- **機能**: リアルタイムコスト監視と予算アラート
+- **監視対象サービス**:
   - Amazon EMR
   - Amazon S3
   - AWS Glue
   - Amazon Athena
   - AWS Lake Formation
 
-### 7. CloudTrail日志模块
-- **功能**: 安全审计和合规性跟踪
-- **Trail名称**: `${PROJECT_PREFIX}-cloudtrail-${ENVIRONMENT}`
+### 7. CloudTrail Logging Module
+- **機能**: セキュリティ監査とコンプライアンス
+- **Trail名**: `${PROJECT_PREFIX}-cloudtrail-${ENVIRONMENT}`
 
-### 8. 电商数据分析模块 🆕
-- **功能**: 专门的电商数据处理和分析
+### 8. Eコマース分析モジュール 🆕
+- **機能**: 専用のEコマースデータ処理と分析
 - **分析内容**:
-  - 客户行为分析
-  - 产品销售分析
-  - 订单趋势分析
-  - 收入统计报表
+  - 顧客行動分析
+  - 商品売上分析
+  - 注文トレンド分析
+  - 収益レポート
 
-## 运维管理
+## 運用管理
 
-### 日常监控
+### 日常的な監視
 ```bash
-# 系统健康检查
+# システムヘルスチェック
 ./scripts/cli/datalake status
 
-# 成本监控
+# コスト監視
 ./scripts/cli/datalake costs
 
-# 资源使用情况
+# リソース使用状況確認
 aws s3 ls s3://${PROJECT_PREFIX}-raw-${ENVIRONMENT} --recursive --summarize
 ```
 
-### 数据分析执行
+### データ分析の実行
 ```bash
-# 上传示例数据（仅首次）
+# サンプルデータのアップロード（初回のみ）
 ./scripts/cli/datalake upload --sample-data
 
-# 执行Glue爬虫
+# Glueクローラーの実行
 aws glue start-crawler --name ${PROJECT_PREFIX}-raw-crawler
 
-# 运行电商分析任务
+# Eコマース分析の実行
 ./scripts/cli/datalake analytics
 
-# Athena查询执行
+# Athenaクエリの実行
 ./scripts/cli/datalake query "SELECT * FROM customers LIMIT 10"
 ```
 
-### 数据处理流水线
+### データ処理パイプライン
 ```bash
-# 1. 数据采集
+# 1. データ収集
 aws s3 cp data/ s3://${PROJECT_PREFIX}-raw-${ENVIRONMENT}/landing/ecommerce/ --recursive
 
-# 2. 数据目录更新
+# 2. データカタログ更新
 aws glue start-crawler --name ${PROJECT_PREFIX}-raw-crawler
 
-# 3. 数据清洗（使用DataBrew）
-# 通过AWS控制台或API执行DataBrew作业
+# 3. データクレンジング（DataBrew使用）
+# AWSコンソールまたはAPIでDataBrewジョブを実行
 
-# 4. 数据分析（EMR + Spark）
+# 4. データ分析（EMR + Spark）
 ./scripts/submit_pyspark_job.sh
 
-# 5. 查询分析（Athena）
+# 5. クエリ分析（Athena）
 aws athena start-query-execution \
   --query-string "SELECT * FROM analytics_db.sales_summary" \
   --result-configuration "OutputLocation=s3://${PROJECT_PREFIX}-analytics-${ENVIRONMENT}/athena-results/"
 ```
 
-## 故障排除
+## トラブルシューティング
 
-### 常见问题及解决方案
+### よくある問題と解決法
 
-#### 1. 环境变量错误
+#### 1. 環境変数エラー
 ```bash
-# 问题："缺少必需的环境变量"
-# 解决：加载配置文件
+# 問題: "必須環境変数が不足"
+# 解決: 設定ファイルを読み込む
 source configs/config.env
 ```
 
-#### 2. CloudFormation栈错误
+#### 2. CloudFormationスタックエラー
 ```bash
-# 问题："Stack already exists"
-# 解决：删除现有栈后重新部署
+# 問題: "Stack already exists"
+# 解決: 既存スタックを削除してから再デプロイ
 aws cloudformation delete-stack --stack-name <stack-name>
 aws cloudformation wait stack-delete-complete --stack-name <stack-name>
 ```
 
-#### 3. EMR集群连接错误
+#### 3. EMRクラスター接続エラー
 ```bash
-# 问题："Cannot connect to EMR cluster"
-# 解决：检查安全组和密钥对
+# 問題: "Cannot connect to EMR cluster"
+# 解決: セキュリティグループとキーペアを確認
 ./scripts/cli/datalake module status emr_cluster
 ```
 
-#### 4. 成本监控部署错误
+#### 4. Cost Monitoring デプロイエラー
 ```bash
-# 问题："Budget creation failed"
-# 解决：cost-monitoring.yaml的CostFilters已修复
-# 已更新为使用Service维度过滤器
+# 問題: "Budget creation failed"
+# 解決: cost-monitoring.yamlのCostFiltersを修正済み
+# Service維度フィルターを使用するように更新されています
 ```
 
-#### 5. 权限不足错误
+#### 5. 権限不足エラー
 ```bash
-# 问题："Access Denied"
-# 解决：检查IAM角色和Lake Formation权限
+# 問題: "Access Denied"
+# 解決: IAMロールとLake Formation権限を確認
 ./scripts/cli/datalake module deploy iam_roles
 ./scripts/cli/datalake module deploy lake_formation
 ```
 
-### 调试模式
+### デバッグモード
 ```bash
-# 启用详细日志
+# 詳細ログを有効化
 export DEBUG=true
 export LOG_LEVEL=DEBUG
 
-# 调试模式运行
+# デバッグモードで実行
 ./scripts/cli/datalake status
 
-# 查看模块日志
+# モジュールログの確認
 tail -f logs/datalake-*.log
 ```
 
-## 预估成本与建议
+## 予想コストと推奨事項
 
-### 月度成本估算（东京区域）
-- **基础配置（不含EMR）**: $5-15/月
-- **包含EMR配置**: $50-200/月（取决于使用时长）
-- **存储成本**: $1-5/月（取决于数据量）
+### 月間コスト見積もり（東京リージョン）
+- **基本構成（EMRなし）**: $5-15/月
+- **EMR含む構成**: $50-200/月（使用時間による）
+- **ストレージ**: $1-5/月（データ量による）
 
-### 成本优化建议
-1. EMR集群使用后立即删除
-2. 充分利用S3生命周期策略（已自动配置）
-3. 使用Spot实例可降低EMR成本60-70%
-4. 定期查看成本监控报告
-5. 使用并行部署编排器减少部署时间
+### コスト最適化のヒント
+1. EMRクラスターは使用後すぐに削除
+2. S3ライフサイクルポリシーの活用（自動設定済み）
+3. Spotインスタンスの使用でEMRコストを60-70%削減
+4. 定期的なコスト監視レポートの確認
+5. 並列デプロイオーケストレーターを使用してデプロイ時間を短縮
 
-## 安全最佳实践
+## セキュリティベストプラクティス
 
-- IAM角色遵循最小权限原则
-- S3存储桶启用加密和版本控制
-- Lake Formation实现细粒度访问控制
-- CloudTrail记录所有操作审计日志
-- 建议使用VPC端点提高安全性
-- 定期进行安全事件分析
-- 敏感数据自动脱敏处理
+- IAMロールは最小権限の原則に従って設定
+- S3バケットは暗号化とバージョニングを有効化
+- Lake Formationによる細粒度のアクセス制御
+- CloudTrailによる全操作の監査ログ記録
+- VPCエンドポイントの使用を推奨
+- 定期的なセキュリティイベント分析
+- 機密データの自動マスキング処理
 
-## 项目特色
+## プロジェクトの特徴
 
-### 🎯 核心优势
-1. **模块化设计**: 每个组件独立部署，易于维护
-2. **并行部署**: 智能依赖解析，加速部署过程
-3. **电商场景**: 内置电商数据模型和分析案例
-4. **中文支持**: 完整的中文注释和文档
-5. **成本优化**: 自动化成本监控和优化建议
+### 🎯 コアの強み
+1. **モジュラー設計**: 各コンポーネントが独立してデプロイ可能
+2. **並列デプロイ**: インテリジェントな依存関係解決による高速デプロイ
+3. **Eコマースシナリオ**: 組み込みのEコマースデータモデルと分析例
+4. **中国語サポート**: コード内の完全な中国語コメントとドキュメント
+5. **コスト最適化**: 自動化されたコスト監視と最適化の推奨事項
 
-### 📊 数据模型
-- **客户表** (customers): 客户基础信息
-- **产品表** (products): 产品目录数据
-- **订单表** (orders): 订单交易记录
-- **订单明细表** (order_items): 订单商品明细
+### 📊 データモデル
+- **顧客テーブル** (customers): 顧客プロファイル情報
+- **商品テーブル** (products): 商品カタログデータ
+- **注文テーブル** (orders): 注文取引記録
+- **注文明細テーブル** (order_items): 注文商品明細
 
-## 许可证
+## ライセンス
 
-本项目基于MIT许可证发布。
+このプロジェクトはMITライセンスの下で配布されています。
 
 ---
 
 **作者**: mayinchen  
-**版本**: 2.1  
-**最后更新**: 2025年7月
+**バージョン**: 2.1  
+**最終更新**: 2025年7月
 
-**重要提示**: 本项目为学习目的创建。在生产环境使用前，请充分验证安全和成本配置。
+**重要**: このプロジェクトは学習目的で作成されています。本番環境で使用する前に、セキュリティとコスト設定を十分に確認してください。
 
-**充分利用v2.1的优化功能，实现高效的数据湖管理！**
+**v2.1の最適化された機能を活用して、効率的なデータレイク管理を実現してください！**
