@@ -29,6 +29,11 @@ export AWS_REGION="${AWS_REGION:-us-east-1}"
 # 加载通用工具库
 source "$SCRIPT_DIR/../../lib/common.sh"
 
+# 加载兼容性层
+if [[ -f "$SCRIPT_DIR/../../lib/compatibility.sh" ]]; then
+    source "$SCRIPT_DIR/../../lib/compatibility.sh"
+fi
+
 readonly LAKE_FORMATION_MODULE_VERSION="1.0.0"
 
 # =============================================================================
@@ -93,10 +98,10 @@ lake_formation_validate() {
 lake_formation_deploy() {
     print_info "部署Lake Formation模块"
     
-    # 设置堆栈引用参数 (模板使用堆栈引用而不是直接的角色ARN)
-    local s3_stack_name="${PROJECT_PREFIX}-stack-s3-${ENVIRONMENT}"
-    local iam_stack_name="${PROJECT_PREFIX}-stack-iam-${ENVIRONMENT}"
-    local glue_stack_name="${PROJECT_PREFIX}-stack-glue-${ENVIRONMENT}"
+    # 设置堆栈引用参数 (使用统一函数获取依赖堆栈名称)
+    local s3_stack_name=$(get_dependency_stack_name "s3_storage")
+    local iam_stack_name=$(get_dependency_stack_name "iam_roles")
+    local glue_stack_name=$(get_dependency_stack_name "glue_catalog")
     
     # 调试输出变量值
     print_info "堆栈名称: s3=$s3_stack_name, iam=$iam_stack_name, glue=$glue_stack_name"
@@ -112,17 +117,17 @@ lake_formation_deploy() {
     print_info "堆栈存在性检查: S3=$s3_exists, IAM=$iam_exists, Glue=$glue_exists"
     
     if [[ "$s3_exists" != "true" ]]; then
-        print_error "S3堆栈不存在: $s3_stack_name，请先部署S3模块"
+        print_error "S3 stack does not exist: $s3_stack_name, please deploy S3 module first"
         return 1
     fi
     
     if [[ "$iam_exists" != "true" ]]; then
-        print_error "IAM堆栈不存在: $iam_stack_name，请先部署IAM模块"
+        print_error "IAM stack does not exist: $iam_stack_name, please deploy IAM module first"
         return 1
     fi
     
     if [[ "$glue_exists" != "true" ]]; then
-        print_error "Glue堆栈不存在: $glue_stack_name，请先部署Glue模块"
+        print_error "Glue stack does not exist: $glue_stack_name, please deploy Glue module first"
         return 1
     fi
     
@@ -298,7 +303,7 @@ configure_lake_formation_permissions() {
     local admin_role_arn data_engineer_role_arn analyst_role_arn
     
     # 获取角色ARN
-    local iam_stack_name="${PROJECT_PREFIX}-stack-iam-${ENVIRONMENT}"
+    local iam_stack_name=$(get_dependency_stack_name "iam_roles")
     
     admin_role_arn=$(aws cloudformation describe-stacks \
         --stack-name "$iam_stack_name" \
@@ -413,7 +418,7 @@ lake_formation_cleanup() {
         print_info "删除Lake Formation堆栈: $LAKE_FORMATION_STACK_NAME"
         
         if aws cloudformation delete-stack --stack-name "$LAKE_FORMATION_STACK_NAME"; then
-            if wait_for_stack_completion "$LAKE_FORMATION_STACK_NAME"; then
+            if wait_for_stack_deletion "$LAKE_FORMATION_STACK_NAME"; then
                 print_success "Lake Formation模块清理成功"
                 return 0
             fi

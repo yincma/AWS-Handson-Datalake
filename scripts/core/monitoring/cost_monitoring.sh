@@ -272,7 +272,7 @@ cost_monitoring_cleanup() {
         print_info "删除成本监控堆栈: $COST_STACK_NAME"
         
         if aws cloudformation delete-stack --stack-name "$COST_STACK_NAME"; then
-            if wait_for_stack_completion "$COST_STACK_NAME"; then
+            if wait_for_stack_deletion "$COST_STACK_NAME"; then
                 print_success "成本监控模块清理成功"
                 return 0
             fi

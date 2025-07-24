@@ -20,8 +20,25 @@ load_config || true
 # 模块配置
 # =============================================================================
 
+# 加载兼容性层（如果存在）
+if [[ -f "$SCRIPT_DIR/../../lib/compatibility.sh" ]]; then
+    source "$SCRIPT_DIR/../../lib/compatibility.sh"
+fi
+
 # 模块依赖 - S3存储是基础模块，没有依赖
-S3_STACK_NAME="${PROJECT_PREFIX}-stack-s3-${ENVIRONMENT}"
+# 支持兼容性：检查是否存在旧堆栈
+if [[ -n "${USE_LEGACY_NAMING:-}" ]] || [[ -n "${MIGRATION_MODE:-}" ]]; then
+    S3_STACK_NAME=$(get_stack_name "s3_storage" "${USE_LEGACY_NAMING:-false}")
+else
+    # 检查是否存在任一命名约定的堆栈
+    if existing_stack=$(check_stack_exists_any "s3_storage" 2>/dev/null); then
+        S3_STACK_NAME="$existing_stack"
+        print_debug "使用现有堆栈: $S3_STACK_NAME"
+    else
+        S3_STACK_NAME=$(get_stack_name "s3_storage" false)
+    fi
+fi
+
 S3_TEMPLATE_FILE="${PROJECT_ROOT}/templates/s3-storage-layer.yaml"
 
 # =============================================================================
@@ -87,9 +104,9 @@ s3_storage_deploy() {
         local stack_status
         stack_status=$(get_stack_status "$S3_STACK_NAME")
         
-        # 检查是否为ROLLBACK_COMPLETE状态，如果是则删除栈
-        if [[ "$stack_status" == "ROLLBACK_COMPLETE" ]]; then
-            print_warning "S3堆栈处于ROLLBACK_COMPLETE状态，需要先删除"
+        # 检查是否为ROLLBACK_COMPLETE或DELETE_FAILED状态，如果是则删除栈
+        if [[ "$stack_status" == "ROLLBACK_COMPLETE" || "$stack_status" == "DELETE_FAILED" ]]; then
+            print_warning "S3堆栈处于$stack_status状态，需要先删除"
             print_info "删除S3堆栈: $S3_STACK_NAME"
             
             # 首先清空S3桶
@@ -453,7 +470,7 @@ s3_storage_check_buckets() {
 }
 
 s3_storage_empty_buckets() {
-    print_info "清空S3桶内容"
+    print_info "清空S3桶内容（包括所有版本）"
     
     local buckets
     if buckets=$(s3_storage_get_bucket_names); then
@@ -461,13 +478,31 @@ s3_storage_empty_buckets() {
             if [[ -n "$bucket" ]] && check_s3_bucket_exists "$bucket"; then
                 print_info "清空桶: $bucket"
                 
-                # 删除所有对象版本和删除标记
-                if command -v "$SCRIPT_DIR/../utils/delete-s3-versions.py" &>/dev/null; then
-                    python3 "$SCRIPT_DIR/../utils/delete-s3-versions.py" --bucket "$bucket"
-                else
-                    # 简单清空（不处理版本）
-                    aws s3 rm "s3://$bucket" --recursive
+                # 删除所有对象版本
+                print_debug "删除所有对象版本..."
+                local versions=$(aws s3api list-object-versions --bucket "$bucket" \
+                    --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' \
+                    --output json 2>/dev/null || echo '{"Objects": []}')
+                
+                if [[ $(echo "$versions" | jq '.Objects | length') -gt 0 ]]; then
+                    aws s3api delete-objects --bucket "$bucket" --delete "$versions" >/dev/null || true
                 fi
+                
+                # 删除所有删除标记
+                print_debug "删除所有删除标记..."
+                local markers=$(aws s3api list-object-versions --bucket "$bucket" \
+                    --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' \
+                    --output json 2>/dev/null || echo '{"Objects": []}')
+                
+                if [[ $(echo "$markers" | jq '.Objects | length') -gt 0 ]]; then
+                    aws s3api delete-objects --bucket "$bucket" --delete "$markers" >/dev/null || true
+                fi
+                
+                # 删除任何剩余的当前版本对象
+                print_debug "删除剩余对象..."
+                aws s3 rm "s3://$bucket" --recursive --force 2>/dev/null || true
+                
+                print_success "桶已清空: $bucket"
             fi
         done <<< "$buckets"
     fi

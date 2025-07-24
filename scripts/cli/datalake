@@ -244,8 +244,8 @@ EOF
     done
     
     if [[ "$deep_clean" == "true" ]]; then
-        print_info "S3深度削除を実行中..."
-        "$PROJECT_ROOT/scripts/utils/delete-s3-versions.py" || true
+        # S3深度削除は既にs3_storage_cleanupで実行済み
+        print_debug "S3深度削除は各モジュールのcleanup処理で実行済み"
     fi
     
     print_success "データレイクリソースの削除が完了"

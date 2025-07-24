@@ -46,7 +46,8 @@ setup_deployment_dependencies() {
     print_step "设置部署依赖关系"
     
     # Bash 3.x兼容的部署组定义 - 修复依赖关系
-    INFRASTRUCTURE_GROUP="s3_storage iam_roles"
+    INFRASTRUCTURE_GROUP="s3_storage"
+    IAM_GROUP="iam_roles"
     CATALOG_GROUP="glue_catalog"  
     LAKE_FORMATION_GROUP="lake_formation"
     COMPUTE_GROUP="emr_cluster"
@@ -54,6 +55,7 @@ setup_deployment_dependencies() {
     
     print_debug "部署组配置："
     print_debug "  基础设施层: $INFRASTRUCTURE_GROUP"
+    print_debug "  IAM层: $IAM_GROUP"
     print_debug "  数据目录层: $CATALOG_GROUP"
     print_debug "  Lake Formation层: $LAKE_FORMATION_GROUP"
     print_debug "  计算层: $COMPUTE_GROUP"
@@ -75,6 +77,9 @@ get_group_tasks() {
     case "$group" in
         infrastructure)
             echo "$INFRASTRUCTURE_GROUP"
+            ;;
+        iam)
+            echo "$IAM_GROUP"
             ;;
         catalog)
             echo "$CATALOG_GROUP"
@@ -420,7 +425,7 @@ deploy_all_parallel() {
     local successful_groups=""  # Bash 3.x兼容：使用字符串而非数组
     local failed_group=""
     
-    for group in infrastructure catalog lake_formation compute monitoring; do
+    for group in infrastructure iam catalog lake_formation compute monitoring; do
         local tasks=$(get_group_tasks "$group")
         
         if [[ -n "$tasks" ]]; then

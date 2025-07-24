@@ -349,22 +349,10 @@ aws-datalake-handson/
 ### 🔄 Migration from Legacy Scripts
 If you're upgrading from an older version:
 
-**Old Way** (v1.x):
-```bash
-# Deployment
-./scripts/deploy-all.sh --with-emr --with-analytics
-# Cleanup
-./scripts/cleanup.sh --force --deep-clean --retry-failed
-# Cost monitoring
-./scripts/cost-optimization.sh
-```
-
 **New Way** (v2.1+, **Recommended**):
 ```bash
 # Deployment
 ./scripts/cli/datalake deploy --full
-# Cleanup
-./scripts/cli/datalake destroy --force --deep-clean
 # Cost monitoring
 ./scripts/cli/datalake costs
 ```
@@ -381,7 +369,7 @@ If you're upgrading from an older version:
    - Use spot instances for EMR
    - Implement S3 lifecycle policies
    - Monitor and set budget alerts
-   - Regular resource cleanup
+   - Regular resource cleanup with CloudFormation
 
 3. **Performance**
    - Partition data appropriately

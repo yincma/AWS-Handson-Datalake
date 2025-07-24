@@ -16,17 +16,14 @@ Parameters:
   S3StackName:
     Type: String
     Description: Name of the S3 storage layer CloudFormation stack
-    Default: datalake-s3-storage
 
   IAMStackName:
     Type: String
     Description: Name of the IAM roles CloudFormation stack
-    Default: datalake-iam-roles
 
   GlueStackName:
     Type: String
     Description: Name of the Glue catalog CloudFormation stack
-    Default: datalake-glue-catalog
 
 Resources:
   # NOTE: DataLakeDatabase is created by the Glue module, not here

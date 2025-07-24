@@ -11,6 +11,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 source "$SCRIPT_DIR/../../lib/common.sh"
 
+# 加载兼容性层（如果存在）
+if [[ -f "$SCRIPT_DIR/../../lib/compatibility.sh" ]]; then
+    source "$SCRIPT_DIR/../../lib/compatibility.sh"
+fi
+
 readonly CLOUDTRAIL_LOGGING_MODULE_VERSION="1.0.0"
 
 # 加载配置（如果尚未加载）
@@ -71,17 +76,48 @@ cloudtrail_logging_validate() {
 cloudtrail_logging_deploy() {
     print_info "CloudTrailログ記録モジュールをデプロイ"
     
-    # S3バケット名を取得
-    local s3_stack_name="${PROJECT_PREFIX}-stack-s3-${ENVIRONMENT}"
-    local raw_bucket
+    # S3バケット名を取得 - 複数の可能な命名規則をチェック
+    local s3_stack_name=""
+    local raw_bucket=""
     
+    # 方法1: 既存のv2スタックをチェック
+    local v2_stack_name="${PROJECT_PREFIX}-v2-stack-s3-storage-${ENVIRONMENT}"
+    if check_stack_exists "$v2_stack_name"; then
+        s3_stack_name="$v2_stack_name"
+        print_debug "v2スタックを使用: $s3_stack_name"
+    fi
+    
+    # 方法2: 標準の命名規則をチェック
+    if [[ -z "$s3_stack_name" ]]; then
+        local standard_stack_name="${PROJECT_PREFIX}-stack-s3-${ENVIRONMENT}"
+        if check_stack_exists "$standard_stack_name"; then
+            s3_stack_name="$standard_stack_name"
+            print_debug "標準スタックを使用: $s3_stack_name"
+        fi
+    fi
+    
+    # 方法3: check_stack_exists_any関数が利用可能な場合は使用
+    if [[ -z "$s3_stack_name" ]] && declare -F check_stack_exists_any >/dev/null 2>&1; then
+        if existing_stack=$(check_stack_exists_any "s3_storage" 2>/dev/null); then
+            s3_stack_name="$existing_stack"
+            print_debug "check_stack_exists_anyで見つかったスタック: $s3_stack_name"
+        fi
+    fi
+    
+    # スタックが見つからない場合
+    if [[ -z "$s3_stack_name" ]]; then
+        print_error "S3スタックが見つかりません"
+        return 1
+    fi
+    
+    # S3バケット名を取得
     raw_bucket=$(aws cloudformation describe-stacks \
         --stack-name "$s3_stack_name" \
         --query 'Stacks[0].Outputs[?OutputKey==`RawDataBucketName`].OutputValue' \
         --output text 2>/dev/null)
     
     if [[ -z "$raw_bucket" ]]; then
-        print_error "S3バケット名を取得できません"
+        print_error "S3バケット名を取得できません (スタック: $s3_stack_name)"
         return 1
     fi
     
@@ -170,12 +206,20 @@ cloudtrail_logging_cleanup() {
         aws cloudtrail stop-logging --name "$CLOUDTRAIL_NAME" &>/dev/null
         
         # CloudTrailを削除
-        if aws cloudtrail delete-trail --name "$CLOUDTRAIL_NAME"; then
+        if aws cloudtrail delete-trail --name "$CLOUDTRAIL_NAME" 2>/dev/null; then
             print_success "CloudTrailログ記録モジュールの清理が成功"
             return 0
         else
-            print_error "CloudTrailの削除に失敗"
-            return 1
+            # TrailNotFoundExceptionの場合は成功として扱う
+            local error_output
+            error_output=$(aws cloudtrail delete-trail --name "$CLOUDTRAIL_NAME" 2>&1 || true)
+            if echo "$error_output" | grep -q "TrailNotFoundException"; then
+                print_info "CloudTrailは既に削除されています"
+                return 0
+            else
+                print_error "CloudTrailの削除に失敗"
+                return 1
+            fi
         fi
     else
         print_info "CloudTrailログ記録モジュールが未デプロイのため、清理不要"
