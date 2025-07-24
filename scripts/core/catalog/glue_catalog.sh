@@ -29,6 +29,11 @@ export AWS_REGION="${AWS_REGION:-us-east-1}"
 # 加载通用工具库
 source "$SCRIPT_DIR/../../lib/common.sh"
 
+# 加载兼容性层
+if [[ -f "$SCRIPT_DIR/../../lib/compatibility.sh" ]]; then
+    source "$SCRIPT_DIR/../../lib/compatibility.sh"
+fi
+
 readonly GLUE_CATALOG_MODULE_VERSION="1.0.0"
 
 # =============================================================================
@@ -94,18 +99,18 @@ glue_catalog_validate() {
 glue_catalog_deploy() {
     print_info "部署Glue数据目录模块"
     
-    # 设置堆栈引用参数 (模板使用堆栈引用而不是直接的资源名)
-    local s3_stack_name="${PROJECT_PREFIX}-stack-s3-${ENVIRONMENT}"
-    local iam_stack_name="${PROJECT_PREFIX}-stack-iam-${ENVIRONMENT}"
+    # 设置堆栈引用参数 (使用统一函数获取依赖堆栈名称)
+    local s3_stack_name=$(get_dependency_stack_name "s3_storage")
+    local iam_stack_name=$(get_dependency_stack_name "iam_roles")
     
     # 验证依赖堆栈存在
     if ! check_stack_exists "$s3_stack_name"; then
-        print_error "S3堆栈不存在: $s3_stack_name，请先部署S3模块"
+        print_error "S3堆栈不存在: $s3_stack_name, 请先部署S3模块"
         return 1
     fi
     
     if ! check_stack_exists "$iam_stack_name"; then
-        print_error "IAM堆栈不存在: $iam_stack_name，请先部署IAM模块"
+        print_error "IAM堆栈不存在: $iam_stack_name, 请先部署IAM模块"
         return 1
     fi
     
@@ -346,7 +351,7 @@ glue_catalog_cleanup() {
         print_info "删除Glue堆栈: $GLUE_STACK_NAME"
         
         if aws cloudformation delete-stack --stack-name "$GLUE_STACK_NAME"; then
-            if wait_for_stack_completion "$GLUE_STACK_NAME"; then
+            if wait_for_stack_deletion "$GLUE_STACK_NAME"; then
                 print_success "Glue数据目录模块清理成功"
                 return 0
             fi

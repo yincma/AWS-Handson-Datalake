@@ -365,10 +365,14 @@ generate_resource_name() {
     local resource_type="$1"
     local suffix="${2:-}"
     
-    local name_parts=("$PROJECT_PREFIX" "$resource_type" "$ENVIRONMENT")
-    
+    # 根据资源类型决定命名格式
+    local name_parts=()
     if [[ -n "$suffix" ]]; then
-        name_parts+=("$suffix")
+        # 如果有后缀，格式为：PROJECT_PREFIX-resource_type-suffix-ENVIRONMENT
+        name_parts=("$PROJECT_PREFIX" "$resource_type" "$suffix" "$ENVIRONMENT")
+    else
+        # 如果没有后缀，格式为：PROJECT_PREFIX-resource_type-ENVIRONMENT
+        name_parts=("$PROJECT_PREFIX" "$resource_type" "$ENVIRONMENT")
     fi
     
     local resource_name
@@ -384,6 +388,26 @@ get_s3_bucket_name() {
 get_stack_name() {
     local stack_type="$1"
     generate_resource_name "stack" "$stack_type"
+}
+
+# 获取依赖堆栈名称的统一函数
+# 注意：如果加载了 compatibility.sh，check_stack_exists_any 函数会处理新旧命名约定
+get_dependency_stack_name() {
+    local module_type="$1"
+    
+    # 如果 check_stack_exists_any 函数可用（来自 compatibility.sh），使用它
+    if declare -F check_stack_exists_any >/dev/null 2>&1; then
+        local existing_stack
+        existing_stack=$(check_stack_exists_any "$module_type" 2>/dev/null || echo "")
+        
+        if [[ -n "$existing_stack" ]]; then
+            echo "$existing_stack"
+            return 0
+        fi
+    fi
+    
+    # 否则，返回标准的堆栈名称
+    get_stack_name "$module_type"
 }
 
 # =============================================================================
@@ -497,6 +521,48 @@ wait_for_stack_completion() {
     done
 }
 
+wait_for_stack_deletion() {
+    local stack_name="$1"
+    local timeout="${2:-600}" # 10 minutes default timeout for deletion
+    local start_time
+    start_time=$(date +%s)
+    
+    print_info "Waiting for stack deletion to complete: $stack_name"
+    
+    while true; do
+        local status
+        status=$(get_stack_status "$stack_name")
+        
+        case "$status" in
+            DELETE_COMPLETE|DOES_NOT_EXIST)
+                print_success "Stack deleted successfully: $stack_name"
+                return 0
+                ;;
+            DELETE_FAILED)
+                print_error "Stack deletion failed: $stack_name"
+                return 1
+                ;;
+            DELETE_IN_PROGRESS)
+                local current_time
+                current_time=$(date +%s)
+                local elapsed=$((current_time - start_time))
+                
+                if [[ $elapsed -gt $timeout ]]; then
+                    print_error "Stack deletion timed out: $stack_name"
+                    return 1
+                fi
+                
+                print_debug "Stack deletion in progress (waited ${elapsed}s)"
+                sleep 10
+                ;;
+            *)
+                print_warning "Unexpected status during deletion: $status"
+                return 1
+                ;;
+        esac
+    done
+}
+
 # =============================================================================
 # Performance and Monitoring
 # =============================================================================
@@ -559,7 +625,7 @@ export -f print_debug print_info print_warning print_error print_critical
 export -f print_step print_success print_failure
 export -f handle_error retry_with_backoff retry_aws_command
 export -f validate_prerequisites load_config
-export -f generate_resource_name get_s3_bucket_name get_stack_name
+export -f generate_resource_name get_s3_bucket_name get_stack_name get_dependency_stack_name
 export -f check_stack_exists check_s3_bucket_exists get_stack_status
-export -f confirm_action wait_for_stack_completion
+export -f confirm_action wait_for_stack_completion wait_for_stack_deletion
 export -f start_timer end_timer

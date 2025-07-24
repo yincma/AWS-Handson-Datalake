@@ -20,7 +20,24 @@ load_config || true
 # 模块配置
 # =============================================================================
 
-IAM_STACK_NAME="${PROJECT_PREFIX}-stack-iam-${ENVIRONMENT}"
+# 加载兼容性层（如果存在）
+if [[ -f "$SCRIPT_DIR/../../lib/compatibility.sh" ]]; then
+    source "$SCRIPT_DIR/../../lib/compatibility.sh"
+fi
+
+# 支持兼容性：检查是否存在旧堆栈
+if [[ -n "${USE_LEGACY_NAMING:-}" ]] || [[ -n "${MIGRATION_MODE:-}" ]]; then
+    IAM_STACK_NAME=$(get_stack_name "iam_roles" "${USE_LEGACY_NAMING:-false}")
+else
+    # 检查是否存在任一命名约定的堆栈
+    if existing_stack=$(check_stack_exists_any "iam_roles" 2>/dev/null); then
+        IAM_STACK_NAME="$existing_stack"
+        print_debug "使用现有堆栈: $IAM_STACK_NAME"
+    else
+        IAM_STACK_NAME="${PROJECT_PREFIX}-stack-iam-${ENVIRONMENT}"
+    fi
+fi
+
 IAM_TEMPLATE_FILE="${PROJECT_ROOT}/templates/iam-roles-policies.yaml"
 
 # =============================================================================
@@ -71,10 +88,14 @@ iam_roles_validate() {
 iam_roles_deploy() {
     print_info "部署IAM角色模块"
     
+    # 获取S3堆栈名称（使用统一函数）
+    local s3_stack_name
+    s3_stack_name=$(get_dependency_stack_name "s3_storage")
+    
     local template_params=(
         ParameterKey=ProjectPrefix,ParameterValue="$PROJECT_PREFIX"
         ParameterKey=Environment,ParameterValue="$ENVIRONMENT"
-        ParameterKey=S3StackName,ParameterValue="${PROJECT_PREFIX}-stack-s3-${ENVIRONMENT}"
+        ParameterKey=S3StackName,ParameterValue="$s3_stack_name"
     )
     
     if check_stack_exists "$IAM_STACK_NAME"; then
@@ -222,7 +243,7 @@ iam_roles_cleanup() {
         print_info "删除IAM堆栈: $IAM_STACK_NAME"
         
         if aws cloudformation delete-stack --stack-name "$IAM_STACK_NAME"; then
-            if wait_for_stack_completion "$IAM_STACK_NAME"; then
+            if wait_for_stack_deletion "$IAM_STACK_NAME"; then
                 print_success "IAM角色模块清理成功"
                 return 0
             fi

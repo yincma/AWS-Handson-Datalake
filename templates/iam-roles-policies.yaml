@@ -16,7 +16,6 @@ Parameters:
   S3StackName:
     Type: String
     Description: Name of the S3 storage layer CloudFormation stack
-    Default: datalake-s3-storage
 
 Resources:
   # Lab Admin Role - Full administrative access
