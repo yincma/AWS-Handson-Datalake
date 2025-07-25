@@ -1,37 +1,37 @@
 #!/bin/bash
 
 # =============================================================================
-# 并行化部署编排器
-# 版本: 1.0.0
-# 描述: 智能解析模块依赖关系并执行并行部署
+# Parallel Deployment Orchestrator
+# Version: 1.0.0
+# Description: Intelligently analyzes module dependencies and executes parallel deployment
 # =============================================================================
 
 # 获取脚本目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-# 加载通用工具库
+# Load common utility library
 source "$SCRIPT_DIR/../../lib/common.sh"
 source "$SCRIPT_DIR/../../lib/interfaces/module_interface.sh"
 
 readonly PARALLEL_ORCHESTRATOR_VERSION="1.0.0"
 
 # =============================================================================
-# 全局状态管理
+# Global State Management
 # =============================================================================
 
-# Bash 3.x互換性のため連想配列を無効化
-# declare -A TASK_STATUS        # 任务状态映射
-# declare -A TASK_PID           # 任务进程ID映射  
-# declare -A TASK_START_TIME    # 任务开始时间
-# declare -A TASK_LOG_FILE      # 任务日志文件
-# declare -A TASK_RESULT        # 任务执行结果
-# declare -A DEPLOYMENT_GROUPS  # 部署任务组
-PARALLEL_JOBS=3    # 最大并行任务数
-DEPLOYMENT_TIMEOUT=1800  # 30分钟超时
+# Disable associative arrays for Bash 3.x compatibility
+# declare -A TASK_STATUS        # Task status mapping
+# declare -A TASK_PID           # Task process ID mapping  
+# declare -A TASK_START_TIME    # Task start time
+# declare -A TASK_LOG_FILE      # Task log file
+# declare -A TASK_RESULT        # Task execution result
+# declare -A DEPLOYMENT_GROUPS  # Deployment task groups
+PARALLEL_JOBS=3    # Maximum parallel tasks
+DEPLOYMENT_TIMEOUT=1800  # 30 minute timeout
 ENABLE_ROLLBACK_ON_FAILURE=true
 
-# 任务状态常量
+# Task status constants
 readonly STATUS_PENDING="pending"
 readonly STATUS_RUNNING="running" 
 readonly STATUS_COMPLETED="completed"
@@ -39,13 +39,13 @@ readonly STATUS_FAILED="failed"
 readonly STATUS_SKIPPED="skipped"
 
 # =============================================================================
-# 依赖关系定义
+# Dependency Relationship Definition
 # =============================================================================
 
 setup_deployment_dependencies() {
-    print_step "设置部署依赖关系"
+    print_step "Setting up deployment dependencies"
     
-    # Bash 3.x兼容的部署组定义 - 修复依赖关系
+    # Bash 3.x compatible deployment group definition - fix dependencies
     INFRASTRUCTURE_GROUP="s3_storage"
     IAM_GROUP="iam_roles"
     CATALOG_GROUP="glue_catalog"  
@@ -53,25 +53,25 @@ setup_deployment_dependencies() {
     COMPUTE_GROUP="emr_cluster"
     MONITORING_GROUP="cost_monitoring cloudtrail_logging"
     
-    print_debug "部署组配置："
-    print_debug "  基础设施层: $INFRASTRUCTURE_GROUP"
-    print_debug "  IAM层: $IAM_GROUP"
-    print_debug "  数据目录层: $CATALOG_GROUP"
-    print_debug "  Lake Formation层: $LAKE_FORMATION_GROUP"
-    print_debug "  计算层: $COMPUTE_GROUP"
-    print_debug "  监控层: $MONITORING_GROUP"
+    print_debug "Deployment group configuration:"
+    print_debug "  Infrastructure layer: $INFRASTRUCTURE_GROUP"
+    print_debug "  IAM layer: $IAM_GROUP"
+    print_debug "  Data catalog layer: $CATALOG_GROUP"
+    print_debug "  Lake Formation layer: $LAKE_FORMATION_GROUP"
+    print_debug "  Compute layer: $COMPUTE_GROUP"
+    print_debug "  Monitoring layer: $MONITORING_GROUP"
     
-    # 注册具体的模块依赖关系（虽然函数被禁用，但保留以备将来使用）
+    # Register specific module dependencies (although function is disabled, kept for future use)
     register_module_dependency "glue_catalog" "s3_storage,iam_roles"
     register_module_dependency "lake_formation" "iam_roles,glue_catalog" 
     register_module_dependency "emr_cluster" "s3_storage,iam_roles,glue_catalog"
     register_module_dependency "cost_monitoring" "s3_storage"
     register_module_dependency "cloudtrail_logging" "s3_storage,iam_roles"
     
-    print_success "部署依赖关系设置完成"
+    print_success "Deployment dependency setup completed"
 }
 
-# Bash 3.x兼容的组任务获取函数
+# Bash 3.x compatible group task retrieval function
 get_group_tasks() {
     local group="$1"
     case "$group" in
@@ -100,20 +100,20 @@ get_group_tasks() {
 }
 
 # =============================================================================
-# 任务管理
+# Task Management
 # =============================================================================
 
-# Bash 3.x兼容的关联数组模拟函数
+# Bash 3.x compatible associative array simulation function
 set_task_property() {
     local task="$1"
     local property="$2"
     local value="$3"
     
-    # 对任务名进行编码以创建有效的变量名
+    # Encode task name to create valid variable name
     local encoded_task="$(echo "$task" | tr '-' '_' | tr '.' '_')"
     local var_name="TASK_${property}_${encoded_task}"
     
-    # 动态设置变量
+    # Dynamically set variable
     eval "$var_name=\"\$value\""
 }
 
@@ -121,21 +121,21 @@ get_task_property() {
     local task="$1"
     local property="$2"
     
-    # 对任务名进行编码以创建有效的变量名
+    # Encode task name to create valid variable name
     local encoded_task="$(echo "$task" | tr '-' '_' | tr '.' '_')"
     local var_name="TASK_${property}_${encoded_task}"
     
-    # 动态获取变量值
+    # Dynamically get variable value
     eval "echo \"\$$var_name\""
 }
 
-# 获取所有已初始化的任务列表
+# Get list of all initialized tasks
 get_all_tasks() {
-    # 使用全局变量跟踪所有任务
+    # Use global variable to track all tasks
     echo "$INITIALIZED_TASKS"
 }
 
-# 获取任务数量
+# Get task count
 get_task_count() {
     if [[ -n "$INITIALIZED_TASKS" ]]; then
         echo "$INITIALIZED_TASKS" | wc -w
@@ -144,20 +144,20 @@ get_task_count() {
     fi
 }
 
-# 添加任务到列表
+# Add task to list
 add_task_to_list() {
     local task="$1"
     if [[ -z "$INITIALIZED_TASKS" ]]; then
         INITIALIZED_TASKS="$task"
     else
-        # 检查任务是否已经在列表中
+        # Check if task is already in list
         if [[ ! " $INITIALIZED_TASKS " =~ " $task " ]]; then
             INITIALIZED_TASKS="$INITIALIZED_TASKS $task"
         fi
     fi
 }
 
-# 全局变量存储所有已初始化的任务
+# Global variable to store all initialized tasks
 INITIALIZED_TASKS=""
 
 initialize_task() {
@@ -166,17 +166,17 @@ initialize_task() {
     
     mkdir -p "$log_dir"
     
-    # 使用兼容函数替代关联数组
+    # Use compatibility functions instead of associative arrays
     set_task_property "$task" STATUS "$STATUS_PENDING"
     set_task_property "$task" LOG_FILE "$log_dir/${task}_$(date +%Y%m%d_%H%M%S).log"
     set_task_property "$task" START_TIME ""
     set_task_property "$task" PID ""
     set_task_property "$task" RESULT ""
     
-    # 将任务添加到全局任务列表
+    # Add task to global task list
     add_task_to_list "$task"
     
-    print_debug "任务初始化: $task -> $(get_task_property "$task" LOG_FILE)"
+    print_debug "Task initialized: $task -> $(get_task_property "$task" LOG_FILE)"
 }
 
 start_task() {
@@ -185,26 +185,26 @@ start_task() {
     
     local current_status="$(get_task_property "$task" STATUS)"
     if [[ "$current_status" != "$STATUS_PENDING" ]]; then
-        print_warning "任务状态不是pending，无法启动: $task ($current_status)"
+        print_warning "Task status is not pending, cannot start: $task ($current_status)"
         return 1
     fi
     
-    print_info "启动任务: $task.$operation"
+    print_info "Starting task: $task.$operation"
     
-    # 更新任务状态
+    # Update task status
     set_task_property "$task" STATUS "$STATUS_RUNNING"
     set_task_property "$task" START_TIME "$(date +%s)"
     
     local log_file="$(get_task_property "$task" LOG_FILE)"
     
-    # 在后台执行任务，重定向输出到日志文件
+    # Execute task in background, redirect output to log file
     (
-        # 设置任务特定的环境
+        # Set task-specific environment
         export TASK_NAME="$task"
         export OPERATION="$operation"
         export LOG_FILE="$log_file"
         
-        # 执行模块操作
+        # Execute module operation
         if module_interface "$operation" "$task"; then
             echo "TASK_SUCCESS:$task" >> "$log_file"
             exit 0
@@ -214,10 +214,10 @@ start_task() {
         fi
     ) > "$log_file" 2>&1 &
     
-    # 记录进程ID
+    # Record process ID
     set_task_property "$task" PID "$!"
     
-    print_debug "任务已启动: $task (PID: $(get_task_property "$task" PID))"
+    print_debug "Task started: $task (PID: $(get_task_property "$task" PID))"
 }
 
 wait_for_task() {
@@ -228,22 +228,22 @@ wait_for_task() {
     local start_time="$(get_task_property "$task" START_TIME)"
     
     if [[ -z "$pid" || -z "$start_time" ]]; then
-        print_error "任务信息不完整: $task"
+        print_error "Task information incomplete: $task"
         return 1
     fi
     
-    print_debug "等待任务完成: $task (PID: $pid)"
+    print_debug "Waiting for task completion: $task (PID: $pid)"
     
-    # 等待进程完成或超时
+    # Wait for process completion or timeout
     local elapsed=0
     while kill -0 "$pid" 2>/dev/null; do
         sleep 5
         elapsed=$(($(date +%s) - start_time))
         
         if [[ $elapsed -gt $timeout ]]; then
-            print_error "任务超时: $task (${elapsed}s > ${timeout}s)"
+            print_error "Task timeout: $task (${elapsed}s > ${timeout}s)"
             
-            # 杀死超时的任务
+            # Kill timed out task
             kill -TERM "$pid" 2>/dev/null || true
             sleep 5
             kill -KILL "$pid" 2>/dev/null || true
@@ -254,23 +254,23 @@ wait_for_task() {
         fi
     done
     
-    # 获取任务退出状态
+    # Get task exit status
     local exit_code
     wait "$pid"
     exit_code=$?
     
-    # 更新任务状态
+    # Update task status
     local duration=$(($(date +%s) - start_time))
     
     if [[ $exit_code -eq 0 ]]; then
         set_task_property "$task" STATUS "$STATUS_COMPLETED"
         set_task_property "$task" RESULT "SUCCESS:${duration}s"
-        print_success "任务完成: $task (耗时: ${duration}s)"
+        print_success "Task completed: $task (duration: ${duration}s)"
         return 0
     else
         set_task_property "$task" STATUS "$STATUS_FAILED"
         set_task_property "$task" RESULT "FAILED:${duration}s:$exit_code"
-        print_error "任务失败: $task (耗时: ${duration}s, 退出码: $exit_code)"
+        print_error "Task failed: $task (duration: ${duration}s, exit code: $exit_code)"
         return 1
     fi
 }
@@ -282,16 +282,16 @@ get_task_logs() {
     local log_file="$(get_task_property "$task" LOG_FILE)"
     
     if [[ -n "$log_file" && -f "$log_file" ]]; then
-        echo "=== 任务日志: $task ==="
+        echo "=== Task logs: $task ==="
         tail -n "$lines" "$log_file"
         echo "========================"
     else
-        print_warning "任务日志文件不存在: $task"
+        print_warning "Task log file does not exist: $task"
     fi
 }
 
 # =============================================================================
-# 并行执行引擎
+# Parallel Execution Engine
 # =============================================================================
 
 execute_group_parallel() {
@@ -299,24 +299,24 @@ execute_group_parallel() {
     local tasks_string="$2"
     local operation="${3:-deploy}"
     
-    print_step "并行执行任务组: $group_name"
+    print_step "Executing task group in parallel: $group_name"
     
-    # 解析任务列表
+    # Parse task list
     IFS=' ' read -ra tasks <<< "$tasks_string"
     
     if [[ ${#tasks[@]} -eq 0 ]]; then
-        print_warning "任务组为空: $group_name"
+        print_warning "Task group is empty: $group_name"
         return 0
     fi
     
-    print_info "任务组包含 ${#tasks[@]} 个任务: ${tasks[*]}"
+    print_info "Task group contains ${#tasks[@]} tasks: ${tasks[*]}"
     
-    # 初始化所有任务
+    # Initialize all tasks
     for task in "${tasks[@]}"; do
         initialize_task "$task"
     done
     
-    # 启动任务（考虑并行度限制）
+    # Start tasks (considering parallelism limits)
     local running_tasks=()
     local pending_tasks=("${tasks[@]}")
     local completed_tasks=()
@@ -324,34 +324,34 @@ execute_group_parallel() {
     
     while [[ ${#pending_tasks[@]} -gt 0 || ${#running_tasks[@]} -gt 0 ]]; do
         
-        # 启动新任务（在并行度限制内）
+        # Start new tasks (within parallelism limits)
         while [[ ${#running_tasks[@]} -lt $PARALLEL_JOBS && ${#pending_tasks[@]} -gt 0 ]]; do
             local task="${pending_tasks[0]}"
-            pending_tasks=("${pending_tasks[@]:1}")  # 移除第一个元素
+            pending_tasks=("${pending_tasks[@]:1}")  # Remove first element
             
             if start_task "$task" "$operation"; then
                 running_tasks+=("$task")
-                print_info "任务启动: $task (当前运行: ${#running_tasks[@]}/$PARALLEL_JOBS)"
+                print_info "Task started: $task (currently running: ${#running_tasks[@]}/$PARALLEL_JOBS)"
             else
                 failed_tasks+=("$task")
-                print_error "任务启动失败: $task"
+                print_error "Task start failed: $task"
             fi
         done
         
-        # 检查运行中的任务
+        # Check running tasks
         local still_running=()
         
         for task in "${running_tasks[@]}"; do
             local pid="$(get_task_property "$task" PID)"
             
             if ! kill -0 "$pid" 2>/dev/null; then
-                # 任务已完成，等待获取结果
-                if wait_for_task "$task" 0; then  # 0表示不等待，立即检查
+                # Task completed, wait to get result
+                if wait_for_task "$task" 0; then  # 0 means no wait, check immediately
                     completed_tasks+=("$task")
-                    print_success "✓ 任务完成: $task"
+                    print_success "✓ Task completed: $task"
                 else
                     failed_tasks+=("$task")
-                    print_error "✗ 任务失败: $task"
+                    print_error "✗ Task failed: $task"
                 fi
             else
                 still_running+=("$task")
@@ -364,30 +364,30 @@ execute_group_parallel() {
             running_tasks=()
         fi
         
-        # 显示进度
+        # Show progress
         local total_tasks=${#tasks[@]}
         local finished_tasks=$((${#completed_tasks[@]} + ${#failed_tasks[@]}))
         
         if [[ $finished_tasks -lt $total_tasks ]]; then
-            show_progress $finished_tasks $total_tasks "组: $group_name"
+            show_progress $finished_tasks $total_tasks "Group: $group_name"
             sleep 2
         fi
     done
     
     finish_progress
     
-    # 输出任务组执行结果
+    # Output task group execution results
     echo
-    print_info "任务组 '$group_name' 执行结果:"
-    print_success "  成功: ${#completed_tasks[@]} 个任务"
+    print_info "Task group '$group_name' execution results:"
+    print_success "  Successful: ${#completed_tasks[@]} tasks"
     
     if [[ ${#failed_tasks[@]} -gt 0 ]]; then
-        print_error "  失败: ${#failed_tasks[@]} 个任务"
+        print_error "  Failed: ${#failed_tasks[@]} tasks"
         
         for task in "${failed_tasks[@]}"; do
             print_error "    - $task: $(get_task_property "$task" RESULT)"
             
-            # 显示失败任务的日志摘要
+            # Show summary of failed task logs
             if [[ "$LOG_LEVEL" == "DEBUG" ]]; then
                 get_task_logs "$task" 10
             fi
@@ -395,7 +395,7 @@ execute_group_parallel() {
         
         return 1
     else
-        print_success "  所有任务执行成功！"
+        print_success "  All tasks executed successfully!"
         return 0
     fi
 }
@@ -408,77 +408,77 @@ deploy_all_parallel() {
     local operation="${1:-deploy}"
     local enable_rollback="${2:-$ENABLE_ROLLBACK_ON_FAILURE}"
     
-    print_step "开始并行部署编排"
-    print_info "操作: $operation"
-    print_info "最大并行度: $PARALLEL_JOBS"
-    print_info "任务超时: ${DEPLOYMENT_TIMEOUT}s"
-    print_info "失败回滚: $enable_rollback"
+    print_step "Starting parallel deployment orchestration"
+    print_info "Operation: $operation"
+    print_info "Maximum parallelism: $PARALLEL_JOBS"
+    print_info "Task timeout: ${DEPLOYMENT_TIMEOUT}s"
+    print_info "Failure rollback: $enable_rollback"
     
-    # 设置依赖关系
+    # Set up dependencies
     setup_deployment_dependencies
     
-    # 记录总开始时间
+    # Record total start time
     local deployment_start_time
     deployment_start_time=$(date +%s)
     
-    # 按组顺序执行（组内并行，组间串行）
-    local successful_groups=""  # Bash 3.x兼容：使用字符串而非数组
+    # Execute by group order (parallel within groups, serial between groups)
+    local successful_groups=""  # Bash 3.x compatible: use strings instead of arrays
     local failed_group=""
     
     for group in infrastructure iam catalog lake_formation compute monitoring; do
         local tasks=$(get_group_tasks "$group")
         
         if [[ -n "$tasks" ]]; then
-            print_info "开始部署组: $group"
+            print_info "Starting deployment group: $group"
             
             if execute_group_parallel "$group" "$tasks" "$operation"; then
-                # 添加到成功组列表
+                # Add to successful groups list
                 if [[ -z "$successful_groups" ]]; then
                     successful_groups="$group"
                 else
                     successful_groups="$successful_groups $group"
                 fi
-                print_success "部署组成功: $group"
+                print_success "Deployment group successful: $group"
             else
                 failed_group="$group"
-                print_error "部署组失败: $group"
+                print_error "Deployment group failed: $group"
                 break
             fi
         else
-            print_warning "跳过空任务组: $group"
+            print_warning "Skipping empty task group: $group"
         fi
         
-        echo  # 组间分隔符
+        echo  # Inter-group separator
     done
     
-    # 计算总耗时
+    # Calculate total duration
     local total_duration=$(($(date +%s) - deployment_start_time))
     
-    # 输出最终结果
+    # Output final results
     echo
-    print_step "并行部署结果摘要"
+    print_step "Parallel deployment results summary"
     
     if [[ -z "$failed_group" ]]; then
-        print_success "🎉 所有部署组执行成功！"
-        print_info "成功的组: ${successful_groups[*]}"
-        print_info "总耗时: ${total_duration}s"
+        print_success "🎉 All deployment groups executed successfully!"
+        print_info "Successful groups: ${successful_groups[*]}"
+        print_info "Total duration: ${total_duration}s"
         
-        # 生成部署报告
+        # Generate deployment report
         generate_deployment_report "SUCCESS" "$total_duration"
         
         return 0
     else
-        print_error "❌ 部署失败在组: $failed_group"
-        print_info "成功的组: $successful_groups"
-        print_info "失败前耗时: ${total_duration}s"
+        print_error "❌ Deployment failed at group: $failed_group"
+        print_info "Successful groups: $successful_groups"
+        print_info "Duration before failure: ${total_duration}s"
         
-        # 执行回滚（如果启用）
+        # Execute rollback (if enabled)
         if [[ "$enable_rollback" == true && -n "$successful_groups" ]]; then
-            print_warning "执行自动回滚..."
+            print_warning "Executing automatic rollback..."
             rollback_successful_groups $successful_groups
         fi
         
-        # 生成故障报告
+        # Generate failure report
         generate_deployment_report "FAILED" "$total_duration" "$failed_group"
         
         return 1
@@ -486,8 +486,8 @@ deploy_all_parallel() {
 }
 
 rollback_successful_groups() {
-    # Bash 3.x兼容的简单回滚逻辑
-    print_step "回滚成功的部署组"
+    # Bash 3.x compatible simple rollback logic
+    print_step "Rolling back successful deployment groups"
     
     # 简单的反向回滚顺序：monitoring -> compute -> lake_formation -> catalog -> infrastructure
     local rollback_order="monitoring compute lake_formation catalog infrastructure"
@@ -622,30 +622,30 @@ show_deployment_status() {
 
 show_help() {
     cat << EOF
-并行化部署编排器 v$PARALLEL_ORCHESTRATOR_VERSION
+Parallel Deployment Orchestrator v$PARALLEL_ORCHESTRATOR_VERSION
 
-用法: $0 <command> [options]
+Usage: $0 <command> [options]
 
-命令:
-    deploy                    执行并行部署
-    rollback                  执行回滚操作
-    status                    显示部署状态
-    validate                  验证所有模块
-    cleanup                   清理所有模块
+Commands:
+    deploy                    Execute parallel deployment
+    rollback                  Execute rollback operation
+    status                    Display deployment status
+    validate                  Validate all modules
+    cleanup                   Clean up all modules
     
-选项:
-    -j, --jobs N              设置最大并行任务数 (默认: 3)
-    -t, --timeout N           设置任务超时时间(秒) (默认: 1800)
-    --no-rollback            失败时不自动回滚
-    -v, --verbose            详细输出
-    -h, --help               显示帮助
+Options:
+    -j, --jobs N              Set maximum parallel tasks (default: 3)
+    -t, --timeout N           Set task timeout in seconds (default: 1800)
+    --no-rollback            Do not auto-rollback on failure
+    -v, --verbose            Verbose output
+    -h, --help               Display help
 
-示例:
-    $0 deploy                           # 标准并行部署
-    $0 deploy -j 5 -t 3600             # 5个并行任务，1小时超时
-    $0 deploy --no-rollback             # 部署但不自动回滚
-    $0 validate -v                      # 详细验证所有模块
-    $0 status                           # 显示当前状态
+Examples:
+    $0 deploy                           # Standard parallel deployment
+    $0 deploy -j 5 -t 3600             # 5 parallel tasks, 1 hour timeout
+    $0 deploy --no-rollback             # Deploy without auto-rollback
+    $0 validate -v                      # Verbose validation of all modules
+    $0 status                           # Display current status
 
 EOF
 }

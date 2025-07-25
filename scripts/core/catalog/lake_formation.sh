@@ -1,16 +1,16 @@
 #!/bin/bash
 
 # =============================================================================
-# Lake Formation模块
-# 版本: 1.0.0
-# 描述: 管理数据湖的Lake Formation权限和安全
+# Lake Formation Module
+# Version: 1.0.0
+# Description: Manage Lake Formation permissions and security for the data lake
 # =============================================================================
 
-# 初始化项目环境
+# Initialize project environment
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-# 加载配置
+# Load configuration
 if [[ -f "$PROJECT_ROOT/configs/config.local.env" ]]; then
     set -a
     source "$PROJECT_ROOT/configs/config.local.env"
@@ -21,15 +21,15 @@ elif [[ -f "$PROJECT_ROOT/configs/config.env" ]]; then
     set +a
 fi
 
-# 设置默认值
+# Set default values
 export PROJECT_PREFIX="${PROJECT_PREFIX:-dl-handson}"
 export ENVIRONMENT="${ENVIRONMENT:-dev}"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
 
-# 加载通用工具库
+# Load common utility library
 source "$SCRIPT_DIR/../../lib/common.sh"
 
-# 加载兼容性层
+# Load compatibility layer
 if [[ -f "$SCRIPT_DIR/../../lib/compatibility.sh" ]]; then
     source "$SCRIPT_DIR/../../lib/compatibility.sh"
 fi
@@ -37,84 +37,84 @@ fi
 readonly LAKE_FORMATION_MODULE_VERSION="1.0.0"
 
 # =============================================================================
-# 模块配置
+# Module Configuration
 # =============================================================================
 
 LAKE_FORMATION_STACK_NAME="${PROJECT_PREFIX}-stack-lakeformation-${ENVIRONMENT}"
 LAKE_FORMATION_TEMPLATE_FILE="${PROJECT_ROOT}/templates/lake-formation-simple.yaml"
 
 # =============================================================================
-# 必需函数实现
+# Required Function Implementations
 # =============================================================================
 
 lake_formation_validate() {
-    print_info "验证Lake Formation模块配置"
+    print_info "Validating Lake Formation module configuration"
     
     local validation_errors=0
     
-    # 检查必需的环境变量
+    # Check required environment variables
     local required_vars=("PROJECT_PREFIX" "ENVIRONMENT" "AWS_REGION" "AWS_ACCOUNT_ID")
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var:-}" ]]; then
-            print_error "缺少必需的环境变量: $var"
+            print_error "Missing required environment variable: $var"
             validation_errors=$((validation_errors + 1))
         fi
     done
     
-    # 检查CloudFormation模板文件
+    # Check CloudFormation template file
     if [[ ! -f "$LAKE_FORMATION_TEMPLATE_FILE" ]]; then
-        print_error "Lake Formation模板文件不存在: $LAKE_FORMATION_TEMPLATE_FILE"
+        print_error "Lake Formation template file does not exist: $LAKE_FORMATION_TEMPLATE_FILE"
         validation_errors=$((validation_errors + 1))
     fi
     
-    # 验证Lake Formation权限
+    # Validate Lake Formation permissions
     if ! aws lakeformation get-data-lake-settings &>/dev/null; then
-        print_error "Lake Formation权限验证失败"
+        print_error "Lake Formation permission validation failed"
         validation_errors=$((validation_errors + 1))
     fi
     
-    # 检查依赖模块
+    # Check dependency modules
     local iam_stack_name="${PROJECT_PREFIX}-stack-iam-${ENVIRONMENT}"
     if ! check_stack_exists "$iam_stack_name"; then
-        print_error "依赖的IAM模块未部署"
+        print_error "Dependent IAM module not deployed"
         validation_errors=$((validation_errors + 1))
     fi
     
     local glue_stack_name="${PROJECT_PREFIX}-stack-glue-${ENVIRONMENT}"
     if ! check_stack_exists "$glue_stack_name"; then
-        print_error "依赖的Glue数据目录模块未部署"
+        print_error "Dependent Glue data catalog module not deployed"
         validation_errors=$((validation_errors + 1))
     fi
     
     if [[ $validation_errors -eq 0 ]]; then
-        print_success "Lake Formation模块验证通过"
+        print_success "Lake Formation module validation passed"
         return 0
     else
-        print_error "Lake Formation模块验证失败: $validation_errors 个错误"
+        print_error "Lake Formation module validation failed: $validation_errors errors"
         return 1
     fi
 }
 
 lake_formation_deploy() {
-    print_info "部署Lake Formation模块"
+    print_info "Deploying Lake Formation module"
     
-    # 设置堆栈引用参数 (使用统一函数获取依赖堆栈名称)
+    # Set stack reference parameters (use unified function to get dependency stack names)
     local s3_stack_name=$(get_dependency_stack_name "s3_storage")
     local iam_stack_name=$(get_dependency_stack_name "iam_roles")
     local glue_stack_name=$(get_dependency_stack_name "glue_catalog")
     
-    # 调试输出变量值
-    print_info "堆栈名称: s3=$s3_stack_name, iam=$iam_stack_name, glue=$glue_stack_name"
+    # Debug output of variable values
+    print_info "Stack names: s3=$s3_stack_name, iam=$iam_stack_name, glue=$glue_stack_name"
     
-    # 验证依赖堆栈存在
-    print_info "验证依赖堆栈存在性..."
+    # Validate that dependency stacks exist
+    print_info "Validating dependency stack existence..."
     
     local s3_exists iam_exists glue_exists
     s3_exists=$(check_stack_exists "$s3_stack_name" && echo "true" || echo "false")
     iam_exists=$(check_stack_exists "$iam_stack_name" && echo "true" || echo "false")
     glue_exists=$(check_stack_exists "$glue_stack_name" && echo "true" || echo "false")
     
-    print_info "堆栈存在性检查: S3=$s3_exists, IAM=$iam_exists, Glue=$glue_exists"
+    print_info "Stack existence check: S3=$s3_exists, IAM=$iam_exists, Glue=$glue_exists"
     
     if [[ "$s3_exists" != "true" ]]; then
         print_error "S3 stack does not exist: $s3_stack_name, please deploy S3 module first"
@@ -139,21 +139,21 @@ lake_formation_deploy() {
         ParameterKey=GlueStackName,ParameterValue="$glue_stack_name"
     )
     
-    # 检查堆栈是否已存在并处理ROLLBACK_COMPLETE状态
+    # Check if stack already exists and handle ROLLBACK_COMPLETE status
     if check_stack_exists "$LAKE_FORMATION_STACK_NAME"; then
         local stack_status
         stack_status=$(get_stack_status "$LAKE_FORMATION_STACK_NAME")
         
-        # 检查是否为ROLLBACK_COMPLETE状态，如果是则删除栈
+        # Check if it's in ROLLBACK_COMPLETE status, delete stack if so
         if [[ "$stack_status" == "ROLLBACK_COMPLETE" ]]; then
-            print_warning "Lake Formation堆栈处于ROLLBACK_COMPLETE状态，需要先删除"
-            print_info "删除Lake Formation堆栈: $LAKE_FORMATION_STACK_NAME"
+            print_warning "Lake Formation stack is in ROLLBACK_COMPLETE status, needs to be deleted first"
+            print_info "Deleting Lake Formation stack: $LAKE_FORMATION_STACK_NAME"
             
-            # 首先清理Lake Formation权限
-            print_info "清理Lake Formation权限..."
+            # First clean up Lake Formation permissions
+            print_info "Cleaning up Lake Formation permissions..."
             local database_name="${PROJECT_PREFIX}-db-${ENVIRONMENT}"
             
-            # 获取所有权限并清理
+            # Get all permissions and clean them up
             local permissions
             permissions=$(aws lakeformation list-permissions \
                 --resource Database="{Name=\"$database_name\"}" \
@@ -166,15 +166,15 @@ lake_formation_deploy() {
                         --principal DataLakePrincipalIdentifier="$principal" \
                         --resource Database="{Name=\"$database_name\"}" \
                         --permissions ALL &>/dev/null || true
-                    print_debug "清理权限: $principal"
+                    print_debug "Cleaning up permission: $principal"
                 fi
             done
             
             if aws cloudformation delete-stack --stack-name "$LAKE_FORMATION_STACK_NAME"; then
-                print_info "等待堆栈删除完成..."
+                print_info "Waiting for stack deletion to complete..."
                 
-                # 等待删除完成
-                local timeout=900  # 15分钟
+                # Wait for deletion to complete
+                local timeout=900  # 15 minutes
                 local elapsed=0
                 
                 while [[ $elapsed -lt $timeout ]]; do
@@ -182,10 +182,10 @@ lake_formation_deploy() {
                     current_status=$(get_stack_status "$LAKE_FORMATION_STACK_NAME")
                     
                     if [[ "$current_status" == "DOES_NOT_EXIST" ]]; then
-                        print_success "Lake Formation堆栈删除完成"
+                        print_success "Lake Formation stack deletion completed"
                         break
                     elif [[ "$current_status" == "DELETE_FAILED" ]]; then
-                        print_error "Lake Formation堆栈删除失败"
+                        print_error "Lake Formation stack deletion failed"
                         return 1
                     fi
                     
@@ -194,16 +194,16 @@ lake_formation_deploy() {
                 done
                 
                 if [[ $elapsed -ge $timeout ]]; then
-                    print_error "Lake Formation堆栈删除超时"
+                    print_error "Lake Formation stack deletion timed out"
                     return 1
                 fi
             else
-                print_error "启动Lake Formation堆栈删除失败"
+                print_error "Failed to start Lake Formation stack deletion"
                 return 1
             fi
             
-            # 删除完成后，创建新栈
-            print_info "创建新的Lake Formation堆栈: $LAKE_FORMATION_STACK_NAME"
+            # After deletion completes, create new stack
+            print_info "Creating new Lake Formation stack: $LAKE_FORMATION_STACK_NAME"
             
             if retry_aws_command aws cloudformation create-stack \
                 --stack-name "$LAKE_FORMATION_STACK_NAME" \
@@ -212,26 +212,26 @@ lake_formation_deploy() {
                 --capabilities CAPABILITY_IAM \
                 --tags Key=Project,Value="$PROJECT_PREFIX" Key=Environment,Value="$ENVIRONMENT"; then
                 
-                print_info "堆栈操作已启动，等待完成..."
+                print_info "Stack operation initiated, waiting for completion..."
                 
-                # 等待堆栈操作完成
+                # Wait for stack operation to complete
                 if wait_for_stack_completion "$LAKE_FORMATION_STACK_NAME"; then
                     configure_lake_formation_permissions
-                    print_success "Lake Formation模块部署成功"
+                    print_success "Lake Formation module deployed successfully"
                     return 0
                 else
-                    print_error "Lake Formation模块部署失败"
+                    print_error "Lake Formation module deployment failed"
                     return 1
                 fi
             else
-                print_error "启动Lake Formation堆栈创建失败"
+                print_error "Failed to start Lake Formation stack creation"
                 return 1
             fi
         else
-            # 正常更新堆栈
-            print_info "Lake Formation堆栈已存在，将进行更新"
+            # Normal stack update
+            print_info "Lake Formation stack already exists, will perform update"
             
-            # 捕获更新命令的输出来处理"No updates are to be performed"情况
+            # Capture update command output to handle "No updates are to be performed" situation
             local update_output
             update_output=$(aws cloudformation update-stack \
                 --stack-name "$LAKE_FORMATION_STACK_NAME" \
@@ -242,31 +242,31 @@ lake_formation_deploy() {
             local update_exit_code=$?
             
             if [[ $update_exit_code -eq 0 ]]; then
-                print_info "堆栈更新已启动，等待完成..."
+                print_info "Stack update initiated, waiting for completion..."
                 
-                # 等待堆栈操作完成
+                # Wait for stack operation to complete
                 if wait_for_stack_completion "$LAKE_FORMATION_STACK_NAME"; then
                     configure_lake_formation_permissions
-                    print_success "Lake Formation模块更新成功"
+                    print_success "Lake Formation module updated successfully"
                     return 0
                 else
-                    print_error "Lake Formation模块更新失败"
+                    print_error "Lake Formation module update failed"
                     return 1
                 fi
             elif [[ "$update_output" == *"No updates are to be performed"* ]]; then
-                # 堆栈无变化，这是正常情况
-                print_info "堆栈无变化，配置权限"
+                # Stack has no changes, this is normal
+                print_info "Stack has no changes, configuring permissions"
                 configure_lake_formation_permissions
-                print_success "Lake Formation模块验证成功（无变化）"
+                print_success "Lake Formation module validation successful (no changes)"
                 return 0
             else
-                print_error "启动Lake Formation堆栈更新失败: $update_output"
+                print_error "Failed to start Lake Formation stack update: $update_output"
                 return 1
             fi
         fi
     else
-        # 创建新堆栈
-        print_info "创建新的Lake Formation堆栈: $LAKE_FORMATION_STACK_NAME"
+        # Create new stack
+        print_info "Creating new Lake Formation stack: $LAKE_FORMATION_STACK_NAME"
         
         if retry_aws_command aws cloudformation create-stack \
             --stack-name "$LAKE_FORMATION_STACK_NAME" \
@@ -275,34 +275,34 @@ lake_formation_deploy() {
             --capabilities CAPABILITY_IAM \
             --tags Key=Project,Value="$PROJECT_PREFIX" Key=Environment,Value="$ENVIRONMENT"; then
             
-            print_info "堆栈创建已启动，等待完成..."
+            print_info "Stack creation initiated, waiting for completion..."
             
-            # 等待堆栈操作完成
+            # Wait for stack operation to complete
             if wait_for_stack_completion "$LAKE_FORMATION_STACK_NAME"; then
                 configure_lake_formation_permissions
-                print_success "Lake Formation模块部署成功"
+                print_success "Lake Formation module deployed successfully"
                 return 0
             else
-                print_error "Lake Formation模块部署失败"
+                print_error "Lake Formation module deployment failed"
                 return 1
             fi
         else
-            print_error "启动Lake Formation堆栈创建失败"
+            print_error "Failed to start Lake Formation stack creation"
             return 1
         fi
     fi
     
-    print_error "Lake Formation模块部署失败"
+    print_error "Lake Formation module deployment failed"
     return 1
 }
 
 configure_lake_formation_permissions() {
-    print_info "配置Lake Formation权限"
+    print_info "Configuring Lake Formation permissions"
     
     local database_name="${PROJECT_PREFIX}-db-${ENVIRONMENT}"
     local admin_role_arn data_engineer_role_arn analyst_role_arn
     
-    # 获取角色ARN
+    # Get role ARNs
     local iam_stack_name=$(get_dependency_stack_name "iam_roles")
     
     admin_role_arn=$(aws cloudformation describe-stacks \
@@ -320,51 +320,51 @@ configure_lake_formation_permissions() {
         --query 'Stacks[0].Outputs[?OutputKey==`DataAnalystRoleArn`].OutputValue' \
         --output text 2>/dev/null)
     
-    # 为管理员角色授予数据库的全部权限
+    # Grant full database permissions to admin role
     if [[ -n "$admin_role_arn" ]]; then
         aws lakeformation grant-permissions \
             --principal DataLakePrincipalIdentifier="$admin_role_arn" \
             --resource Database="{Name=\"$database_name\"}" \
             --permissions ALL &>/dev/null || true
-        print_debug "✓ 管理员权限已配置"
+        print_debug "✓ Admin permissions configured"
     fi
     
-    # 为数据工程师角色授予读写权限
+    # Grant read-write permissions to data engineer role
     if [[ -n "$data_engineer_role_arn" ]]; then
         aws lakeformation grant-permissions \
             --principal DataLakePrincipalIdentifier="$data_engineer_role_arn" \
             --resource Database="{Name=\"$database_name\"}" \
             --permissions CREATE_TABLE ALTER DROP &>/dev/null || true
-        print_debug "✓ 数据工程师权限已配置"
+        print_debug "✓ Data engineer permissions configured"
     fi
     
-    # 为分析师角色授予只读权限
+    # Grant read-only permissions to analyst role
     if [[ -n "$analyst_role_arn" ]]; then
         aws lakeformation grant-permissions \
             --principal DataLakePrincipalIdentifier="$analyst_role_arn" \
             --resource Database="{Name=\"$database_name\"}" \
             --permissions DESCRIBE &>/dev/null || true
-        print_debug "✓ 分析师权限已配置"
+        print_debug "✓ Analyst permissions configured"
     fi
     
-    print_success "Lake Formation权限配置完成"
+    print_success "Lake Formation permission configuration completed"
 }
 
 lake_formation_status() {
-    print_info "检查Lake Formation模块状态"
+    print_info "Checking Lake Formation module status"
     
     local status
     status=$(get_stack_status "$LAKE_FORMATION_STACK_NAME")
     
     case "$status" in
         CREATE_COMPLETE|UPDATE_COMPLETE)
-            print_success "Lake Formation模块运行正常: $status"
+            print_success "Lake Formation module running normally: $status"
             
-            # 检查数据湖设置
+            # Check data lake settings
             if aws lakeformation get-data-lake-settings &>/dev/null; then
-                print_debug "✓ Lake Formation服务可用"
+                print_debug "✓ Lake Formation service available"
                 
-                # 检查数据库权限
+                # Check database permissions
                 local database_name="${PROJECT_PREFIX}-db-${ENVIRONMENT}"
                 local permissions
                 permissions=$(aws lakeformation list-permissions \
@@ -372,32 +372,32 @@ lake_formation_status() {
                     --query 'length(PrincipalResourcePermissions)' \
                     --output text 2>/dev/null || echo "0")
                 
-                print_debug "✓ 数据库权限数量: $permissions"
+                print_debug "✓ Database permission count: $permissions"
             else
-                print_warning "⚠ Lake Formation服务不可用"
+                print_warning "⚠ Lake Formation service not available"
             fi
             
             return 0
             ;;
         DOES_NOT_EXIST)
-            print_warning "Lake Formation模块未部署"
+            print_warning "Lake Formation module not deployed"
             return 1
             ;;
         *)
-            print_error "Lake Formation模块状态异常: $status"
+            print_error "Lake Formation module status abnormal: $status"
             return 1
             ;;
     esac
 }
 
 lake_formation_cleanup() {
-    print_info "清理Lake Formation模块资源"
+    print_info "Cleaning up Lake Formation module resources"
     
-    # 清理权限（为了避免删除堆栈时的依赖问题）
-    print_info "清理Lake Formation权限..."
+    # Clean up permissions (to avoid dependency issues when deleting stack)
+    print_info "Cleaning up Lake Formation permissions..."
     local database_name="${PROJECT_PREFIX}-db-${ENVIRONMENT}"
     
-    # 获取所有权限并清理
+    # Get all permissions and clean them up
     local permissions
     permissions=$(aws lakeformation list-permissions \
         --resource Database="{Name=\"$database_name\"}" \
@@ -410,61 +410,61 @@ lake_formation_cleanup() {
                 --principal DataLakePrincipalIdentifier="$principal" \
                 --resource Database="{Name=\"$database_name\"}" \
                 --permissions ALL &>/dev/null || true
-            print_debug "清理权限: $principal"
+            print_debug "Cleaning up permission: $principal"
         fi
     done
     
     if check_stack_exists "$LAKE_FORMATION_STACK_NAME"; then
-        print_info "删除Lake Formation堆栈: $LAKE_FORMATION_STACK_NAME"
+        print_info "Deleting Lake Formation stack: $LAKE_FORMATION_STACK_NAME"
         
         if aws cloudformation delete-stack --stack-name "$LAKE_FORMATION_STACK_NAME"; then
             if wait_for_stack_deletion "$LAKE_FORMATION_STACK_NAME"; then
-                print_success "Lake Formation模块清理成功"
+                print_success "Lake Formation module cleanup successful"
                 return 0
             fi
         fi
         
-        print_error "Lake Formation模块清理失败"
+        print_error "Lake Formation module cleanup failed"
         return 1
     else
-        print_info "Lake Formation模块未部署，无需清理"
+        print_info "Lake Formation module not deployed, no cleanup needed"
         return 0
     fi
 }
 
 lake_formation_rollback() {
-    print_info "回滚Lake Formation模块更改"
+    print_info "Rolling back Lake Formation module changes"
     
     if check_stack_exists "$LAKE_FORMATION_STACK_NAME"; then
         local status
         status=$(get_stack_status "$LAKE_FORMATION_STACK_NAME")
         
         if [[ "$status" == *"FAILED"* || "$status" == *"ROLLBACK"* ]]; then
-            print_info "检测到失败状态，执行堆栈删除"
+            print_info "Detected failure status, performing stack deletion"
             lake_formation_cleanup
         else
-            print_info "Lake Formation模块状态正常，无需回滚"
+            print_info "Lake Formation module status normal, no rollback needed"
             return 0
         fi
     else
-        print_info "Lake Formation模块不存在，无需回滚"
+        print_info "Lake Formation module does not exist, no rollback needed"
         return 0
     fi
 }
 
 # =============================================================================
-# 如果直接执行此脚本
+# If executing this script directly
 # =============================================================================
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    # 加载模块接口
+    # Load module interface
     source "$SCRIPT_DIR/../../lib/interfaces/module_interface.sh"
     
-    # 执行传入的操作
+    # Execute the passed operation
     if [[ $# -gt 0 ]]; then
         module_interface "$1" "lake_formation" "${@:2}"
     else
-        echo "用法: $0 <action> [args...]"
-        echo "可用操作: validate, deploy, status, cleanup, rollback"
+        echo "Usage: $0 <action> [args...]"
+        echo "Available actions: validate, deploy, status, cleanup, rollback"
     fi
 fi

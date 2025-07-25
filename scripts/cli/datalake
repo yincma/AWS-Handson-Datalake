@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # =============================================================================
-# データレイク統一CLI - datalake コマンド
-# バージョン: 2.0.0
-# 説明: モジュラーアーキテクチャを使用した統一管理CLI
+# Data Lake Unified CLI - datalake command
+# Version: 2.0.0
+# Description: Unified management CLI using modular architecture
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,73 +13,73 @@ source "$SCRIPT_DIR/../lib/common.sh"
 readonly DATALAKE_CLI_VERSION="2.0.0"
 
 # =============================================================================
-# CLIヘルプ表示
+# CLI Help Display
 # =============================================================================
 
 show_help() {
     cat << 'EOF'
-データレイク統一管理CLI (v2.0.0)
+Data Lake Unified Management CLI (v2.0.0)
 
-使用方法:
-  datalake [コマンド] [オプション]
+Usage:
+  datalake [command] [options]
 
-利用可能なコマンド:
+Available commands:
 
-インフラストラクチャ管理:
-  deploy [--full] [--emr] [--analytics]  完全デプロイメント実行
-  destroy [--force] [--deep-clean]      全リソース削除
-  status                                 システム状態確認
-  validate                               設定検証
+Infrastructure Management:
+  deploy [--full] [--emr] [--analytics]  Execute complete deployment
+  destroy [--force] [--deep-clean]      Delete all resources
+  status                                 Check system status
+  validate                               Validate configuration
 
-モジュール管理:
-  module <action> <module_name>         個別モジュール操作
+Module Management:
+  module <action> <module_name>         Individual module operations
     - actions: validate, deploy, status, cleanup, rollback
     - modules: s3_storage, iam_roles, glue_catalog, lake_formation,
                emr_cluster, cost_monitoring, cloudtrail_logging
 
-データ操作:
-  upload [--sample-data]                サンプルデータアップロード
-  analytics                             分析ジョブ実行
-  query <sql_file>                      Athenaクエリ実行
+Data Operations:
+  upload [--sample-data]                Upload sample data
+  analytics                             Execute analysis jobs
+  query <sql_file>                      Execute Athena queries
 
-監視・管理:
-  costs                                 コスト分析
-  logs [--hours <N>]                    CloudTrailログ表示
-  security                              セキュリティ分析
-  monitoring                            システム監視
+Monitoring & Management:
+  costs                                 Cost analysis
+  logs [--hours <N>]                    Display CloudTrail logs
+  security                              Security analysis
+  monitoring                            System monitoring
 
-ユーティリティ:
-  config [--validate] [--export]        設定管理
-  version                              バージョン表示
-  help                                 このヘルプ表示
+Utilities:
+  config [--validate] [--export]        Configuration management
+  version                              Display version
+  help                                 Display this help
 
-例:
-  # 基本インフラストラクチャをデプロイ
+Examples:
+  # Deploy basic infrastructure
   datalake deploy
 
-  # EMRクラスターを含む完全デプロイ
+  # Complete deployment including EMR cluster
   datalake deploy --full
 
-  # 個別モジュールを操作
+  # Operate individual modules
   datalake module deploy s3_storage
   datalake module status emr_cluster
 
-  # コスト監視
+  # Cost monitoring
   datalake costs
 
-  # 完全な削除
+  # Complete deletion
   datalake destroy --force --deep-clean
 
-詳細情報については、各コマンドに --help を付けて実行してください。
+For detailed information, run each command with --help.
 EOF
 }
 
 # =============================================================================
-# コマンド処理関数
+# Command Processing Functions
 # =============================================================================
 
 cmd_deploy() {
-    print_step "データレイクシステムのデプロイを開始"
+    print_step "Starting data lake system deployment"
     
     local full_deploy=false
     local deploy_emr=false  
@@ -103,52 +103,52 @@ cmd_deploy() {
                 ;;
             --help|-h)
                 cat << EOF
-データレイクデプロイコマンド
+Data Lake Deploy Command
 
-使用方法:
-  datalake deploy [オプション]
+Usage:
+  datalake deploy [options]
 
-オプション:
-  --full        EMRクラスターと分析ジョブを含む完全デプロイ
-  --emr         EMRクラスターのみデプロイ
-  --analytics   分析ジョブも実行（EMR必須）
-  --help, -h    このヘルプを表示
+Options:
+  --full        Complete deployment including EMR cluster and analysis jobs
+  --emr         Deploy EMR cluster only
+  --analytics   Execute analysis jobs (EMR required)
+  --help, -h    Display this help
 
-例:
-  datalake deploy              # 基本インフラのみ
-  datalake deploy --full       # 完全デプロイ
-  datalake deploy --emr        # EMR付きデプロイ
+Examples:
+  datalake deploy              # Basic infrastructure only
+  datalake deploy --full       # Complete deployment
+  datalake deploy --emr        # Deploy with EMR
 EOF
                 return 0
                 ;;
             *)
-                print_error "不明なオプション: $1"
+                print_error "Unknown option: $1"
                 return 1
                 ;;
         esac
     done
     
-    # 設定を読み込み
+    # Load configuration
     load_config "$PROJECT_ROOT/configs/config.env"
     
-    # 检查是否使用并行编排器
+    # Check if using parallel orchestrator
     local orchestrator="$PROJECT_ROOT/scripts/core/deployment/parallel_orchestrator.sh"
     if [[ -f "$orchestrator" && "$full_deploy" == "true" ]]; then
-        print_info "使用并行编排器进行完整部署"
+        print_info "Using parallel orchestrator for complete deployment"
         
-        # 使用并行编排器的标准deploy命令
+        # Use parallel orchestrator's standard deploy command
         "$orchestrator" deploy
         
         if [[ "$run_analytics" == "true" ]]; then
-            print_info "执行分析作业..."
+            print_info "Executing analysis jobs..."
             cmd_analytics
         fi
         
-        print_success "数据湖系统部署完成"
+        print_success "Data lake system deployment completed"
     else
-        print_warning "使用传统脚本进行部署"
+        print_warning "Using legacy scripts for deployment"
         
-        # Bash 3.x兼容的参数处理
+        # Bash 3.x compatible parameter processing
         local deploy_args=""
         if [[ "$deploy_emr" == "true" ]]; then
             deploy_args="$deploy_args --with-emr"
@@ -157,10 +157,10 @@ EOF
             deploy_args="$deploy_args --with-analytics"
         fi
         
-        # 设置环境变量防止递归调用
+        # Set environment variable to prevent recursive calls
         export CALLED_FROM_CLI=true
         
-        # 执行传统部署脚本
+        # Execute legacy deployment script
         if [[ -n "$deploy_args" ]]; then
             "$PROJECT_ROOT/scripts/deploy-all.sh" $deploy_args
         else
@@ -190,46 +190,46 @@ cmd_destroy() {
                 ;;
             --help|-h)
                 cat << EOF
-データレイク削除コマンド
+Data Lake Destroy Command
 
-使用方法:
-  datalake destroy [オプション]
+Usage:
+  datalake destroy [options]
 
-オプション:
-  --force           確認なしで削除実行
-  --deep-clean      S3バージョン管理オブジェクトも削除
-  --retry-failed    失敗したスタック削除を再試行
-  --help, -h        このヘルプを表示
+Options:
+  --force           Execute deletion without confirmation
+  --deep-clean      Delete S3 versioned objects as well
+  --retry-failed    Retry failed stack deletions
+  --help, -h        Display this help
 
-例:
-  datalake destroy                           # 通常削除
-  datalake destroy --force --deep-clean     # 完全削除
+Examples:
+  datalake destroy                           # Normal deletion
+  datalake destroy --force --deep-clean     # Complete deletion
 EOF
                 return 0
                 ;;
             *)
-                print_error "不明なオプション: $1"
+                print_error "Unknown option: $1"
                 return 1
                 ;;
         esac
     done
     
     if [[ "$force" != "true" ]]; then
-        print_warning "全てのデータレイクリソースを削除します。"
-        echo -n "続行しますか？ (y/N): "
+        print_warning "All data lake resources will be deleted."
+        echo -n "Do you want to continue? (y/N): "
         read -r response
         if [[ ! "$response" =~ ^[Yy]$ ]]; then
-            print_info "削除操作をキャンセルしました"
+            print_info "Deletion operation cancelled"
             return 0
         fi
     fi
     
-    print_step "データレイクリソースの削除を開始"
+    print_step "Starting data lake resource deletion"
     
-    # 設定を読み込み
+    # Load configuration
     load_config "$PROJECT_ROOT/configs/config.env"
     
-    # モジュール順序で削除（依存関係を考慮）
+    # Delete modules in order (considering dependencies)
     local cleanup_modules=("emr_cluster" "cost_monitoring" "cloudtrail_logging" "lake_formation" "glue_catalog" "iam_roles" "s3_storage")
     
     for module in "${cleanup_modules[@]}"; do
@@ -238,25 +238,25 @@ EOF
         found_script=$(find "$PROJECT_ROOT/scripts/core" -name "${module}.sh" 2>/dev/null | head -1)
         
         if [[ -n "$found_script" ]]; then
-            print_info "モジュール削除: $module"
-            "$found_script" cleanup || print_warning "モジュール $module 削除に失敗"
+            print_info "Deleting module: $module"
+            "$found_script" cleanup || print_warning "Failed to delete module $module"
         fi
     done
     
     if [[ "$deep_clean" == "true" ]]; then
-        # S3深度削除は既にs3_storage_cleanupで実行済み
-        print_debug "S3深度削除は各モジュールのcleanup処理で実行済み"
+        # S3 deep deletion already executed in s3_storage_cleanup
+        print_debug "S3 deep deletion already executed in each module's cleanup process"
     fi
     
-    print_success "データレイクリソースの削除が完了"
+    print_success "Data lake resource deletion completed"
 }
 
 cmd_status() {
-    print_step "データレイクシステム状態確認"
+    print_step "Data lake system status check"
     
     load_config "$PROJECT_ROOT/configs/config.env"
     
-    # 全モジュールの状態をチェック
+    # Check status of all modules
     local modules=("s3_storage" "iam_roles" "glue_catalog" "lake_formation" "emr_cluster" "cost_monitoring" "cloudtrail_logging")
     local healthy_modules=0
     local total_modules=${#modules[@]}
@@ -267,24 +267,24 @@ cmd_status() {
         
         if [[ -n "$found_script" ]]; then
             if "$found_script" status &>/dev/null; then
-                print_success "✅ $module: 正常"
+                print_success "✅ $module: Normal"
                 ((healthy_modules++))
             else
-                print_warning "⚠️ $module: 異常または未デプロイ"
+                print_warning "⚠️ $module: Abnormal or not deployed"
             fi
         else
-            print_error "❌ $module: スクリプトが見つかりません"
+            print_error "❌ $module: Script not found"
         fi
     done
     
     echo
-    print_info "システムヘルス: $healthy_modules/$total_modules モジュールが正常"
+    print_info "System health: $healthy_modules/$total_modules modules are normal"
     
     if [[ $healthy_modules -eq $total_modules ]]; then
-        print_success "🎉 データレイクシステムは完全に稼働中"
+        print_success "🎉 Data lake system is fully operational"
         return 0
     else
-        print_warning "⚠️ いくつかのモジュールに問題があります"
+        print_warning "⚠️ Some modules have issues"
         return 1
     fi
 }
@@ -294,21 +294,21 @@ cmd_module() {
     local module_name="${2:-}"
     
     if [[ -z "$action" || -z "$module_name" ]]; then
-        print_error "使用方法: datalake module <action> <module_name>"
+        print_error "Usage: datalake module <action> <module_name>"
         print_info "Actions: validate, deploy, status, cleanup, rollback"
         print_info "Modules: s3_storage, iam_roles, glue_catalog, lake_formation, emr_cluster, cost_monitoring, cloudtrail_logging"
         return 1
     fi
     
-    # モジュールスクリプトを検索
+    # Search for module script
     local found_script
     found_script=$(find "$PROJECT_ROOT/scripts/core" -name "${module_name}.sh" 2>/dev/null | head -1)
     
     if [[ -n "$found_script" ]]; then
-        print_info "$module_name モジュールで $action を実行"
+        print_info "Executing $action on $module_name module"
         "$found_script" "$action" "${@:3}"
     else
-        print_error "モジュール $module_name が見つかりません"
+        print_error "Module $module_name not found"
         return 1
     fi
 }
@@ -318,7 +318,7 @@ cmd_costs() {
     if [[ -f "$cost_script" ]]; then
         "$cost_script" report
     else
-        print_warning "コストモニタリングモジュールが利用できません"
+        print_warning "Cost monitoring module is not available"
         "$PROJECT_ROOT/scripts/cost-optimization.sh"
     fi
 }
@@ -343,7 +343,7 @@ cmd_logs() {
     if [[ -f "$cloudtrail_script" ]]; then
         "$cloudtrail_script" logs "$hours"
     else
-        print_error "CloudTrailログモジュールが利用できません"
+        print_error "CloudTrail log module is not available"
         return 1
     fi
 }
@@ -353,20 +353,20 @@ cmd_security() {
     if [[ -f "$cloudtrail_script" ]]; then
         "$cloudtrail_script" security
     else
-        print_error "セキュリティ分析モジュールが利用できません"
+        print_error "Security analysis module is not available"
         return 1
     fi
 }
 
 cmd_analytics() {
-    print_step "分析ジョブを実行"
+    print_step "Executing analysis jobs"
     
-    # EMR クラスターの状態を確認
+    # Check EMR cluster status
     local emr_script="$PROJECT_ROOT/scripts/core/compute/emr_cluster.sh"
     if [[ -f "$emr_script" ]] && "$emr_script" status &>/dev/null; then
         "$PROJECT_ROOT/scripts/submit_pyspark_job.sh"
     else
-        print_error "EMRクラスターが利用できません。まず 'datalake module deploy emr_cluster' を実行してください"
+        print_error "EMR cluster is not available. Please run 'datalake module deploy emr_cluster' first"
         return 1
     fi
 }
@@ -386,7 +386,7 @@ cmd_config() {
                 shift
                 ;;
             *)
-                print_error "不明なオプション: $1"
+                print_error "Unknown option: $1"
                 return 1
                 ;;
         esac
@@ -397,25 +397,25 @@ cmd_config() {
     elif [[ "$export_only" == "true" ]]; then
         "$PROJECT_ROOT/scripts/utils/export_env_template.sh"
     else
-        print_info "設定ファイル: $PROJECT_ROOT/configs/config.env"
+        print_info "Configuration file: $PROJECT_ROOT/configs/config.env"
         if [[ -f "$PROJECT_ROOT/configs/config.local.env" ]]; then
-            print_info "ローカル設定: $PROJECT_ROOT/configs/config.local.env"
+            print_info "Local configuration: $PROJECT_ROOT/configs/config.local.env"
         fi
         "$PROJECT_ROOT/scripts/lib/config/validator.sh"
     fi
 }
 
 cmd_version() {
-    echo "datalake CLI バージョン $DATALAKE_CLI_VERSION"
-    echo "モジュラーアーキテクチャベース AWS データレイク管理ツール"
+    echo "datalake CLI version $DATALAKE_CLI_VERSION"
+    echo "Modular architecture-based AWS data lake management tool"
 }
 
 # =============================================================================
-# メインコマンド処理
+# Main Command Processing
 # =============================================================================
 
 main() {
-    # 引数がない場合はヘルプを表示
+    # Display help if no arguments provided
     if [[ $# -eq 0 ]]; then
         show_help
         return 0
@@ -442,15 +442,15 @@ main() {
             cmd_module "$@"
             ;;
         upload)
-            print_info "サンプルデータのアップロード"
-            # TODO: サンプルデータアップロード機能
+            print_info "Sample data upload"
+            # TODO: Sample data upload functionality
             ;;
         analytics)
             cmd_analytics "$@"
             ;;
         query)
-            print_info "Athenaクエリ実行"
-            # TODO: Athenaクエリ実行機能
+            print_info "Athena query execution"
+            # TODO: Athena query execution functionality
             ;;
         costs)
             cmd_costs "$@"
@@ -462,7 +462,7 @@ main() {
             cmd_security "$@"
             ;;
         monitoring)
-            print_info "システム監視ダッシュボード"
+            print_info "System monitoring dashboard"
             cmd_status
             ;;
         config)
@@ -475,7 +475,7 @@ main() {
             show_help
             ;;
         *)
-            print_error "不明なコマンド: $command"
+            print_error "Unknown command: $command"
             echo
             show_help
             return 1
@@ -483,7 +483,7 @@ main() {
     esac
 }
 
-# スクリプトが直接実行された場合
+# When script is executed directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi

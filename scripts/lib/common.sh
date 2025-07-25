@@ -7,7 +7,7 @@
 # =============================================================================
 
 set -eu
-# pipefailはBash 3.x互換性のため無効化
+# pipefail disabled for Bash 3.x compatibility
 
 # Global variables
 # Prevent duplicate loading
@@ -129,24 +129,24 @@ print_failure() { log_message "ERROR" "❌ $1" "$RED"; }
 # Error Handling System
 # =============================================================================
 
-# Bash 3.x互換性のため連想配列を無効化
+# Disable associative arrays for Bash 3.x compatibility
 # declare -A error_handlers
 # declare -g cleanup_functions=()
 error_handlers=""
 cleanup_functions=""
 
 register_error_handler() {
-    # Bash 3.x互換性のため無効化
+    # Disabled for Bash 3.x compatibility
     print_debug "Error handler registration disabled (Bash 3.x compatibility)"
 }
 
 register_cleanup_function() {
-    # Bash 3.x互換性のため無効化
+    # Disabled for Bash 3.x compatibility
     print_debug "Cleanup function registration disabled (Bash 3.x compatibility)"
 }
 
 cleanup_on_error() {
-    # Bash 3.x互換性のため無効化
+    # Disabled for Bash 3.x compatibility
     print_warning "Cleanup functionality disabled (Bash 3.x compatibility)"
 }
 
@@ -365,13 +365,13 @@ generate_resource_name() {
     local resource_type="$1"
     local suffix="${2:-}"
     
-    # 根据资源类型决定命名格式
+    # Determine naming format based on resource type
     local name_parts=()
     if [[ -n "$suffix" ]]; then
-        # 如果有后缀，格式为：PROJECT_PREFIX-resource_type-suffix-ENVIRONMENT
+        # If suffix exists, format: PROJECT_PREFIX-resource_type-suffix-ENVIRONMENT
         name_parts=("$PROJECT_PREFIX" "$resource_type" "$suffix" "$ENVIRONMENT")
     else
-        # 如果没有后缀，格式为：PROJECT_PREFIX-resource_type-ENVIRONMENT
+        # If no suffix, format: PROJECT_PREFIX-resource_type-ENVIRONMENT
         name_parts=("$PROJECT_PREFIX" "$resource_type" "$ENVIRONMENT")
     fi
     
@@ -390,12 +390,12 @@ get_stack_name() {
     generate_resource_name "stack" "$stack_type"
 }
 
-# 获取依赖堆栈名称的统一函数
-# 注意：如果加载了 compatibility.sh，check_stack_exists_any 函数会处理新旧命名约定
+# Unified function to get dependency stack name
+# Note: If compatibility.sh is loaded, check_stack_exists_any function handles both old and new naming conventions
 get_dependency_stack_name() {
     local module_type="$1"
     
-    # 如果 check_stack_exists_any 函数可用（来自 compatibility.sh），使用它
+    # If check_stack_exists_any function is available (from compatibility.sh), use it
     if declare -F check_stack_exists_any >/dev/null 2>&1; then
         local existing_stack
         existing_stack=$(check_stack_exists_any "$module_type" 2>/dev/null || echo "")
@@ -406,7 +406,7 @@ get_dependency_stack_name() {
         fi
     fi
     
-    # 否则，返回标准的堆栈名称
+    # Otherwise, return standard stack name
     get_stack_name "$module_type"
 }
 
@@ -569,13 +569,13 @@ wait_for_stack_deletion() {
 
 start_timer() {
     local timer_name="$1"
-    # Bash 3.x互換性のためグローバル変数宣言を無効化
+    # Disable global variable declaration for Bash 3.x compatibility
     eval "timer_${timer_name}_start=$(date +%s)"
 }
 
 end_timer() {
     local timer_name="$1"
-    # Bash 3.x互換性のため単純化
+    # Simplified for Bash 3.x compatibility
     local start_time
     start_time=$(eval "echo \$timer_${timer_name}_start")
     

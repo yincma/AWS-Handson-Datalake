@@ -1,142 +1,142 @@
 #!/bin/bash
 
 # =============================================================================
-# CloudTrail ログ記録モジュール
-# バージョン: 1.0.0
-# 説明: データレイクのCloudTrail監査ログを管理
+# CloudTrail Logging Module
+# Version: 1.0.0
+# Description: Manage CloudTrail audit logs for the data lake
 # =============================================================================
 
-# 共通ツールライブラリをロード
+# Load common utility library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 source "$SCRIPT_DIR/../../lib/common.sh"
 
-# 加载兼容性层（如果存在）
+# Load compatibility layer (if exists)
 if [[ -f "$SCRIPT_DIR/../../lib/compatibility.sh" ]]; then
     source "$SCRIPT_DIR/../../lib/compatibility.sh"
 fi
 
 readonly CLOUDTRAIL_LOGGING_MODULE_VERSION="1.0.0"
 
-# 加载配置（如果尚未加载）
+# Load configuration (if not already loaded)
 if [[ -z "${PROJECT_PREFIX:-}" ]]; then
     load_config "$PROJECT_ROOT/configs/config.env"
 fi
 
 # =============================================================================
-# モジュール設定
+# Module Configuration
 # =============================================================================
 
 CLOUDTRAIL_NAME="${PROJECT_PREFIX}-cloudtrail-${ENVIRONMENT}"
 CLOUDTRAIL_S3_PREFIX="logs/cloudtrail"
 
 # =============================================================================
-# 必須関数の実装
+# Required Function Implementations
 # =============================================================================
 
 cloudtrail_logging_validate() {
-    print_info "CloudTrailログ記録モジュールの設定を検証"
+    print_info "Validating CloudTrail logging module configuration"
     
     local validation_errors=0
     
-    # 必須環境変数をチェック
+    # Check required environment variables
     local required_vars=("PROJECT_PREFIX" "ENVIRONMENT" "AWS_REGION" "AWS_ACCOUNT_ID")
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var:-}" ]]; then
-            print_error "必須環境変数が不足: $var"
+            print_error "Missing required environment variable: $var"
             validation_errors=$((validation_errors + 1))
         fi
     done
     
-    # CloudTrail権限を検証
+    # Validate CloudTrail permissions
     if ! aws cloudtrail describe-trails &>/dev/null; then
-        print_error "CloudTrail権限の検証に失敗"
+        print_error "CloudTrail permission validation failed"
         validation_errors=$((validation_errors + 1))
     fi
     
-    # 依存モジュールをチェック（S3ストレージ、IAMロール）
+    # Check dependency modules (S3 storage, IAM roles)
     local dependencies=("s3" "iam")
     for dep in "${dependencies[@]}"; do
         local dep_stack_name="${PROJECT_PREFIX}-stack-${dep}-${ENVIRONMENT}"
         if ! check_stack_exists "$dep_stack_name"; then
-            print_error "依存モジュールが未デプロイ: $dep"
+            print_error "Dependency module not deployed: $dep"
             validation_errors=$((validation_errors + 1))
         fi
     done
     
     if [[ $validation_errors -eq 0 ]]; then
-        print_success "CloudTrailログ記録モジュールの検証に合格"
+        print_success "CloudTrail logging module validation passed"
         return 0
     else
-        print_error "CloudTrailログ記録モジュールの検証に失敗: $validation_errors 個のエラー"
+        print_error "CloudTrail logging module validation failed: $validation_errors errors"
         return 1
     fi
 }
 
 cloudtrail_logging_deploy() {
-    print_info "CloudTrailログ記録モジュールをデプロイ"
+    print_info "Deploying CloudTrail logging module"
     
-    # S3バケット名を取得 - 複数の可能な命名規則をチェック
+    # Get S3 bucket name - check multiple possible naming conventions
     local s3_stack_name=""
     local raw_bucket=""
     
-    # 方法1: 既存のv2スタックをチェック
+    # Method 1: Check existing v2 stack
     local v2_stack_name="${PROJECT_PREFIX}-v2-stack-s3-storage-${ENVIRONMENT}"
     if check_stack_exists "$v2_stack_name"; then
         s3_stack_name="$v2_stack_name"
-        print_debug "v2スタックを使用: $s3_stack_name"
+        print_debug "Using v2 stack: $s3_stack_name"
     fi
     
-    # 方法2: 標準の命名規則をチェック
+    # Method 2: Check standard naming convention
     if [[ -z "$s3_stack_name" ]]; then
         local standard_stack_name="${PROJECT_PREFIX}-stack-s3-${ENVIRONMENT}"
         if check_stack_exists "$standard_stack_name"; then
             s3_stack_name="$standard_stack_name"
-            print_debug "標準スタックを使用: $s3_stack_name"
+            print_debug "Using standard stack: $s3_stack_name"
         fi
     fi
     
-    # 方法3: check_stack_exists_any関数が利用可能な場合は使用
+    # Method 3: Use check_stack_exists_any function if available
     if [[ -z "$s3_stack_name" ]] && declare -F check_stack_exists_any >/dev/null 2>&1; then
         if existing_stack=$(check_stack_exists_any "s3_storage" 2>/dev/null); then
             s3_stack_name="$existing_stack"
-            print_debug "check_stack_exists_anyで見つかったスタック: $s3_stack_name"
+            print_debug "Stack found by check_stack_exists_any: $s3_stack_name"
         fi
     fi
     
-    # スタックが見つからない場合
+    # If stack not found
     if [[ -z "$s3_stack_name" ]]; then
-        print_error "S3スタックが見つかりません"
+        print_error "S3 stack not found"
         return 1
     fi
     
-    # S3バケット名を取得
+    # Get S3 bucket name
     raw_bucket=$(aws cloudformation describe-stacks \
         --stack-name "$s3_stack_name" \
         --query 'Stacks[0].Outputs[?OutputKey==`RawDataBucketName`].OutputValue' \
         --output text 2>/dev/null)
     
     if [[ -z "$raw_bucket" ]]; then
-        print_error "S3バケット名を取得できません (スタック: $s3_stack_name)"
+        print_error "Unable to get S3 bucket name (stack: $s3_stack_name)"
         return 1
     fi
     
-    # CloudTrailの設定準備
-    print_info "CloudTrailを設定: S3バケット=$raw_bucket"
+    # Prepare CloudTrail configuration
+    print_info "Configuring CloudTrail: S3 bucket=$raw_bucket"
     
-    # CloudTrailが既存かチェック
+    # Check if CloudTrail already exists
     if aws cloudtrail describe-trails --trail-name-list "$CLOUDTRAIL_NAME" &>/dev/null; then
-        print_info "既存のCloudTrailを更新: $CLOUDTRAIL_NAME"
+        print_info "Updating existing CloudTrail: $CLOUDTRAIL_NAME"
         
         aws cloudtrail put-event-selectors \
             --trail-name "$CLOUDTRAIL_NAME" \
             --event-selectors ReadWriteType=All,IncludeManagementEvents=true,DataResources='[{Type=AWS::S3::Object,Values=["'$raw_bucket'/*"]},{Type=AWS::Glue::Table,Values=["*"]}]' &>/dev/null
         
-        print_success "CloudTrail設定を更新しました"
+        print_success "CloudTrail configuration updated"
     else
-        print_info "新しいCloudTrailを作成: $CLOUDTRAIL_NAME"
+        print_info "Creating new CloudTrail: $CLOUDTRAIL_NAME"
         
-        # CloudTrailを作成
+        # Create CloudTrail
         if aws cloudtrail create-trail \
             --name "$CLOUDTRAIL_NAME" \
             --s3-bucket-name "$raw_bucket" \
@@ -146,18 +146,18 @@ cloudtrail_logging_deploy() {
             --enable-log-file-validation \
             --tags-list Key=Project,Value="$PROJECT_PREFIX" Key=Environment,Value="$ENVIRONMENT"; then
             
-            # ログ記録を開始
+            # Start logging
             aws cloudtrail start-logging --name "$CLOUDTRAIL_NAME"
             
-            # イベントセレクターを設定
+            # Configure event selectors
             aws cloudtrail put-event-selectors \
                 --trail-name "$CLOUDTRAIL_NAME" \
                 --event-selectors ReadWriteType=All,IncludeManagementEvents=true,DataResources='[{Type=AWS::S3::Object,Values=["'$raw_bucket'/*"]},{Type=AWS::Glue::Table,Values=["*"]}]' &>/dev/null
             
-            print_success "CloudTrailログ記録モジュールのデプロイが成功"
+            print_success "CloudTrail logging module deployment successful"
             return 0
         else
-            print_error "CloudTrailの作成に失敗"
+            print_error "CloudTrail creation failed"
             return 1
         fi
     fi
@@ -166,82 +166,82 @@ cloudtrail_logging_deploy() {
 }
 
 cloudtrail_logging_status() {
-    print_info "CloudTrailログ記録モジュールの状態をチェック"
+    print_info "Checking CloudTrail logging module status"
     
     local trail_status
     trail_status=$(aws cloudtrail get-trail-status --name "$CLOUDTRAIL_NAME" --query 'IsLogging' --output text 2>/dev/null)
     
     if [[ "$trail_status" == "True" ]]; then
-        print_success "CloudTrailログ記録モジュールが正常動作中: $CLOUDTRAIL_NAME"
+        print_success "CloudTrail logging module running normally: $CLOUDTRAIL_NAME"
         
-        # 追加情報を表示
+        # Display additional information
         local latest_log
         latest_log=$(aws cloudtrail get-trail-status --name "$CLOUDTRAIL_NAME" --query 'LatestDeliveryTime' --output text 2>/dev/null)
         if [[ -n "$latest_log" && "$latest_log" != "None" ]]; then
-            print_debug "✓ 最新ログ配信時間: $latest_log"
+            print_debug "✓ Latest log delivery time: $latest_log"
         fi
         
-        # イベントセレクターをチェック
+        # Check event selectors
         local data_events
         data_events=$(aws cloudtrail get-event-selectors --trail-name "$CLOUDTRAIL_NAME" --query 'length(EventSelectors[0].DataResources)' --output text 2>/dev/null)
-        print_debug "✓ データイベント設定数: $data_events"
+        print_debug "✓ Data event configuration count: $data_events"
         
         return 0
     elif [[ "$trail_status" == "False" ]]; then
-        print_warning "CloudTrailが存在しますがログ記録が停止中"
+        print_warning "CloudTrail exists but logging is stopped"
         return 1
     else
-        print_warning "CloudTrailログ記録モジュールが未デプロイ"
+        print_warning "CloudTrail logging module not deployed"
         return 1
     fi
 }
 
 cloudtrail_logging_cleanup() {
-    print_info "CloudTrailログ記録モジュールのリソースを清理"
+    print_info "Cleaning up CloudTrail logging module resources"
     
     if aws cloudtrail describe-trails --trail-name-list "$CLOUDTRAIL_NAME" &>/dev/null; then
-        print_info "CloudTrailを削除: $CLOUDTRAIL_NAME"
+        print_info "Deleting CloudTrail: $CLOUDTRAIL_NAME"
         
-        # ログ記録を停止
+        # Stop logging
         aws cloudtrail stop-logging --name "$CLOUDTRAIL_NAME" &>/dev/null
         
-        # CloudTrailを削除
+        # Delete CloudTrail
         if aws cloudtrail delete-trail --name "$CLOUDTRAIL_NAME" 2>/dev/null; then
-            print_success "CloudTrailログ記録モジュールの清理が成功"
+            print_success "CloudTrail logging module cleanup successful"
             return 0
         else
-            # TrailNotFoundExceptionの場合は成功として扱う
+            # Treat TrailNotFoundException as success
             local error_output
             error_output=$(aws cloudtrail delete-trail --name "$CLOUDTRAIL_NAME" 2>&1 || true)
             if echo "$error_output" | grep -q "TrailNotFoundException"; then
-                print_info "CloudTrailは既に削除されています"
+                print_info "CloudTrail has already been deleted"
                 return 0
             else
-                print_error "CloudTrailの削除に失敗"
+                print_error "CloudTrail deletion failed"
                 return 1
             fi
         fi
     else
-        print_info "CloudTrailログ記録モジュールが未デプロイのため、清理不要"
+        print_info "CloudTrail logging module not deployed, no cleanup needed"
         return 0
     fi
 }
 
 cloudtrail_logging_rollback() {
-    print_info "CloudTrailログ記録モジュールの変更をロールバック"
+    print_info "Rolling back CloudTrail logging module changes"
     
-    # CloudTrailのロールバックは削除と同じ
+    # CloudTrail rollback is the same as deletion
     cloudtrail_logging_cleanup
 }
 
 # =============================================================================
-# ユーティリティ関数
+# Utility Functions
 # =============================================================================
 
 show_cloudtrail_logs() {
     local hours="${1:-1}"
     
-    print_info "過去${hours}時間のCloudTrailログを表示"
+    print_info "Displaying CloudTrail logs for the past ${hours} hours"
     
     local start_time end_time
     start_time=$(date -d "${hours} hours ago" -Iseconds)
@@ -253,16 +253,16 @@ show_cloudtrail_logs() {
         --end-time "$(date -d "$end_time" +%s)000" \
         --query 'events[].[eventTime,eventName,sourceIPAddress,userIdentity.type]' \
         --output table 2>/dev/null || \
-    print_warning "CloudTrailログの取得に失敗、またはログが存在しません"
+    print_warning "Failed to retrieve CloudTrail logs, or logs do not exist"
 }
 
 analyze_security_events() {
-    print_info "セキュリティ関連イベントの分析"
+    print_info "Analyzing security-related events"
     
     local start_time
     start_time=$(date -d "24 hours ago" -Iseconds)
     
-    # 疑わしいアクティビティをチェック
+    # Check for suspicious activities
     local suspicious_events=(
         "ConsoleLogin"
         "CreateUser"
@@ -281,22 +281,22 @@ analyze_security_events() {
             --output text 2>/dev/null || echo "0")
         
         if [[ "$count" -gt 0 ]]; then
-            print_warning "⚠ セキュリティイベント検出: $event ($count 回)"
+            print_warning "⚠ Security event detected: $event ($count times)"
         else
-            print_debug "✓ $event: イベントなし"
+            print_debug "✓ $event: No events"
         fi
     done
 }
 
 # =============================================================================
-# 直接実行される場合
+# If executing this script directly
 # =============================================================================
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    # モジュールインターフェースをロード
+    # Load module interface
     source "$SCRIPT_DIR/../../lib/interfaces/module_interface.sh"
     
-    # 追加の分析コマンドをサポート
+    # Support additional analysis commands
     case "${1:-}" in
         logs)
             load_config
@@ -310,11 +310,11 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
             ;;
     esac
     
-    # 渡された操作を実行
+    # Execute the passed operation
     if [[ $# -gt 0 ]]; then
         module_interface "$1" "cloudtrail_logging" "${@:2}"
     else
-        echo "使用方法: $0 <action> [args...]"
-        echo "利用可能な操作: validate, deploy, status, cleanup, rollback, logs, security"
+        echo "Usage: $0 <action> [args...]"
+        echo "Available actions: validate, deploy, status, cleanup, rollback, logs, security"
     fi
 fi

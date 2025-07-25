@@ -1,39 +1,39 @@
 #!/bin/bash
 
 # =============================================================================
-# S3存储模块
-# 版本: 1.0.0
-# 描述: 管理数据湖的S3存储基础设施
+# S3 Storage Module
+# Version: 1.0.0
+# Description: Manage S3 storage infrastructure for the data lake
 # =============================================================================
 
-# 加载通用工具库
+# Load common utility library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 source "$SCRIPT_DIR/../../lib/common.sh"
 
 readonly S3_STORAGE_MODULE_VERSION="1.0.0"
 
-# 設定を初期化
+# Initialize configuration
 load_config || true
 
 # =============================================================================
-# 模块配置
+# Module Configuration
 # =============================================================================
 
-# 加载兼容性层（如果存在）
+# Load compatibility layer (if exists)
 if [[ -f "$SCRIPT_DIR/../../lib/compatibility.sh" ]]; then
     source "$SCRIPT_DIR/../../lib/compatibility.sh"
 fi
 
-# 模块依赖 - S3存储是基础模块，没有依赖
-# 支持兼容性：检查是否存在旧堆栈
+# Module dependencies - S3 storage is a basic module with no dependencies
+# Compatibility support: check if legacy stack exists
 if [[ -n "${USE_LEGACY_NAMING:-}" ]] || [[ -n "${MIGRATION_MODE:-}" ]]; then
     S3_STACK_NAME=$(get_stack_name "s3_storage" "${USE_LEGACY_NAMING:-false}")
 else
-    # 检查是否存在任一命名约定的堆栈
+    # Check if stack exists with any naming convention
     if existing_stack=$(check_stack_exists_any "s3_storage" 2>/dev/null); then
         S3_STACK_NAME="$existing_stack"
-        print_debug "使用现有堆栈: $S3_STACK_NAME"
+        print_debug "Using existing stack: $S3_STACK_NAME"
     else
         S3_STACK_NAME=$(get_stack_name "s3_storage" false)
     fi
@@ -42,81 +42,81 @@ fi
 S3_TEMPLATE_FILE="${PROJECT_ROOT}/templates/s3-storage-layer.yaml"
 
 # =============================================================================
-# 必需函数实现
+# Required function implementations
 # =============================================================================
 
 s3_storage_validate() {
-    print_info "验证S3存储模块配置"
+    print_info "Validating S3 storage module configuration"
     
     local validation_errors=0
     
-    # 检查必需的环境变量
+    # Check required environment variables
     local required_vars=("PROJECT_PREFIX" "ENVIRONMENT" "AWS_REGION")
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var:-}" ]]; then
-            print_error "缺少必需的环境变量: $var"
+            print_error "Missing required environment variable: $var"
             validation_errors=$((validation_errors + 1))
         fi
     done
     
-    # 检查CloudFormation模板文件
+    # Check CloudFormation template file
     if [[ ! -f "$S3_TEMPLATE_FILE" ]]; then
-        print_error "S3模板文件不存在: $S3_TEMPLATE_FILE"
+        print_error "S3 template file does not exist: $S3_TEMPLATE_FILE"
         validation_errors=$((validation_errors + 1))
     else
-        print_debug "S3模板文件存在: $S3_TEMPLATE_FILE"
+        print_debug "S3 template file exists: $S3_TEMPLATE_FILE"
     fi
     
-    # 验证模板语法
+    # Validate template syntax
     if aws cloudformation validate-template --template-body "file://$S3_TEMPLATE_FILE" &>/dev/null; then
-        print_debug "S3模板语法验证通过"
+        print_debug "S3 template syntax validation passed"
     else
-        print_error "S3模板语法验证失败"
+        print_error "S3 template syntax validation failed"
         validation_errors=$((validation_errors + 1))
     fi
     
     if [[ $validation_errors -eq 0 ]]; then
-        print_success "S3存储模块验证通过"
+        print_success "S3 storage module validation passed"
         return 0
     else
-        print_error "S3存储模块验证失败，发现 $validation_errors 个错误"
+        print_error "S3 storage module validation failed with $validation_errors errors"
         return 1
     fi
 }
 
 s3_storage_deploy() {
-    print_info "部署S3存储模块"
+    print_info "Deploying S3 storage module"
     
-    # 首先验证配置
+    # First validate configuration
     if ! s3_storage_validate; then
-        print_error "验证失败，无法部署"
+        print_error "Validation failed, cannot deploy"
         return 1
     fi
     
-    # 准备参数
+    # Prepare parameters
     local stack_params=(
         "ParameterKey=ProjectPrefix,ParameterValue=$PROJECT_PREFIX"
         "ParameterKey=Environment,ParameterValue=$ENVIRONMENT"
     )
     
-    # 检查堆栈是否已存在并处理ROLLBACK_COMPLETE状态
+    # Check if stack exists and handle ROLLBACK_COMPLETE status
     if check_stack_exists "$S3_STACK_NAME"; then
         local stack_status
         stack_status=$(get_stack_status "$S3_STACK_NAME")
         
-        # 检查是否为ROLLBACK_COMPLETE或DELETE_FAILED状态，如果是则删除栈
+        # Check if status is ROLLBACK_COMPLETE or DELETE_FAILED, if so delete stack
         if [[ "$stack_status" == "ROLLBACK_COMPLETE" || "$stack_status" == "DELETE_FAILED" ]]; then
-            print_warning "S3堆栈处于$stack_status状态，需要先删除"
-            print_info "删除S3堆栈: $S3_STACK_NAME"
+            print_warning "S3 stack is in $stack_status state, need to delete first"
+            print_info "Deleting S3 stack: $S3_STACK_NAME"
             
-            # 首先清空S3桶
+            # First empty S3 buckets
             s3_storage_empty_buckets
             
             if aws cloudformation delete-stack --stack-name "$S3_STACK_NAME"; then
-                print_info "等待堆栈删除完成..."
+                print_info "Waiting for stack deletion to complete..."
                 
-                # 等待删除完成
-                local timeout=900  # 15分钟
+                # Wait for deletion to complete
+                local timeout=900  # 15 minutes
                 local elapsed=0
                 
                 while [[ $elapsed -lt $timeout ]]; do
@@ -124,10 +124,10 @@ s3_storage_deploy() {
                     current_status=$(get_stack_status "$S3_STACK_NAME")
                     
                     if [[ "$current_status" == "DOES_NOT_EXIST" ]]; then
-                        print_success "S3堆栈删除完成"
+                        print_success "S3 stack deletion completed"
                         break
                     elif [[ "$current_status" == "DELETE_FAILED" ]]; then
-                        print_error "S3堆栈删除失败"
+                        print_error "S3 stack deletion failed"
                         return 1
                     fi
                     
@@ -136,16 +136,16 @@ s3_storage_deploy() {
                 done
                 
                 if [[ $elapsed -ge $timeout ]]; then
-                    print_error "S3堆栈删除超时"
+                    print_error "S3 stack deletion timed out"
                     return 1
                 fi
             else
-                print_error "启动S3堆栈删除失败"
+                print_error "Failed to start S3 stack deletion"
                 return 1
             fi
             
-            # 删除完成后，创建新栈
-            print_info "创建新的S3堆栈: $S3_STACK_NAME"
+            # After deletion is complete, create new stack
+            print_info "Creating new S3 stack: $S3_STACK_NAME"
             
             if retry_aws_command aws cloudformation create-stack \
                 --stack-name "$S3_STACK_NAME" \
@@ -154,29 +154,29 @@ s3_storage_deploy() {
                 --capabilities CAPABILITY_NAMED_IAM \
                 --tags Key=Project,Value="$PROJECT_PREFIX" Key=Environment,Value="$ENVIRONMENT"; then
                 
-                print_info "堆栈操作已启动，等待完成..."
+                print_info "Stack operation started, waiting for completion..."
                 
-                # 等待堆栈操作完成
+                # Wait for stack operation to complete
                 if wait_for_stack_completion "$S3_STACK_NAME"; then
-                    print_success "S3存储模块部署成功"
+                    print_success "S3 storage module deployment successful"
                     
-                    # 获取并显示输出
+                    # Get and display outputs
                     s3_storage_show_outputs
                     
                     return 0
                 else
-                    print_error "S3存储模块部署失败"
+                    print_error "S3 storage module deployment failed"
                     return 1
                 fi
             else
-                print_error "启动S3堆栈创建失败"
+                print_error "Failed to start S3 stack creation"
                 return 1
             fi
         else
-            # 正常更新堆栈
-            print_info "S3堆栈已存在，将进行更新"
+            # Normal stack update
+            print_info "S3 stack exists, will update"
             
-            # 尝试更新堆栈
+            # Try to update stack
             local update_output
             update_output=$(aws cloudformation update-stack \
                 --stack-name "$S3_STACK_NAME" \
@@ -187,39 +187,39 @@ s3_storage_deploy() {
             
             local update_exit_code=$?
             
-            # 检查是否是"无需更新"的情况
+            # Check if "no update needed" situation
             if [[ $update_exit_code -ne 0 ]] && echo "$update_output" | grep -q "No updates are to be performed"; then
-                print_success "S3堆栈已是最新状态，无需更新"
+                print_success "S3 stack is already up to date, no update needed"
                 
-                # 获取并显示输出
+                # Get and display outputs
                 s3_storage_show_outputs
                 
                 return 0
             elif [[ $update_exit_code -eq 0 ]]; then
-                print_info "堆栈更新已启动，等待完成..."
+                print_info "Stack update started, waiting for completion..."
                 
-                # 等待堆栈操作完成
+                # Wait for stack operation to complete
                 if wait_for_stack_completion "$S3_STACK_NAME"; then
-                    print_success "S3存储模块更新成功"
+                    print_success "S3 storage module update successful"
                     
-                    # 获取并显示输出
+                    # Get and display outputs
                     s3_storage_show_outputs
                     
                     return 0
                 else
-                    print_error "S3存储模块更新失败"
+                    print_error "S3 storage module update failed"
                     return 1
                 fi
             else
-                # 其他更新错误
-                print_error "启动S3堆栈更新失败"
+                # Other update error
+                print_error "Failed to start S3 stack update"
                 echo "$update_output"
                 return 1
             fi
         fi
     else
-        # 创建新的S3堆栈
-        print_info "创建新的S3堆栈: $S3_STACK_NAME"
+        # Creating new S3 stack
+        print_info "Creating new S3 stack: $S3_STACK_NAME"
         
         if retry_aws_command aws cloudformation create-stack \
             --stack-name "$S3_STACK_NAME" \
@@ -228,83 +228,83 @@ s3_storage_deploy() {
             --capabilities CAPABILITY_NAMED_IAM \
             --tags Key=Project,Value="$PROJECT_PREFIX" Key=Environment,Value="$ENVIRONMENT"; then
             
-            print_info "堆栈操作已启动，等待完成..."
+            print_info "Stack operation started, waiting for completion..."
             
-            # 等待堆栈操作完成
+            # Wait for stack operation to complete
             if wait_for_stack_completion "$S3_STACK_NAME"; then
-                print_success "S3存储模块部署成功"
+                print_success "S3 storage module deployment successful"
                 
-                # 获取并显示输出
+                # Get and display outputs
                 s3_storage_show_outputs
                 
                 return 0
             else
-                print_error "S3存储模块部署失败"
+                print_error "S3 storage module deployment failed"
                 return 1
             fi
         else
-            print_error "启动S3堆栈创建失败"
+            print_error "Failed to start S3 stack creation"
             return 1
         fi
     fi
 }
 
 s3_storage_status() {
-    print_info "检查S3存储模块状态"
+    print_info "Checking S3 storage module status"
     
-    # 检查CloudFormation堆栈状态
+    # Check CloudFormation stack status
     local stack_status
     stack_status=$(get_stack_status "$S3_STACK_NAME")
     
     case "$stack_status" in
         CREATE_COMPLETE|UPDATE_COMPLETE)
-            print_success "S3堆栈状态正常: $stack_status"
+            print_success "S3 stack status normal: $stack_status"
             ;;
         CREATE_IN_PROGRESS|UPDATE_IN_PROGRESS)
-            print_info "S3堆栈操作进行中: $stack_status"
+            print_info "S3 stack operation in progress: $stack_status"
             ;;
         *FAILED*|*ROLLBACK*)
-            print_error "S3堆栈状态异常: $stack_status"
+            print_error "S3 stack status abnormal: $stack_status"
             return 1
             ;;
         DOES_NOT_EXIST)
-            print_warning "S3堆栈不存在"
+            print_warning "S3 stack does not exist"
             return 1
             ;;
         *)
-            print_warning "S3堆栈状态未知: $stack_status"
+            print_warning "S3 stack status unknown: $stack_status"
             return 1
             ;;
     esac
     
-    # 检查S3桶状态
+    # Check S3 bucket status
     s3_storage_check_buckets
     
     return 0
 }
 
 s3_storage_cleanup() {
-    print_info "清理S3存储模块资源"
+    print_info "Cleaning up S3 storage module resources"
     
-    # 警告用户
-    print_warning "这将删除所有S3桶和数据！"
-    if ! confirm_action "确定要清理S3存储资源吗？" "n"; then
-        print_info "取消清理操作"
+    # Warn user
+    print_warning "This will delete all S3 buckets and data!"
+    if ! confirm_action "Are you sure you want to clean up S3 storage resources?" "n"; then
+        print_info "Cleanup operation cancelled"
         return 0
     fi
     
-    # 首先清空S3桶
+    # First empty S3 buckets
     s3_storage_empty_buckets
     
-    # 删除CloudFormation堆栈
+    # Delete CloudFormation stack
     if check_stack_exists "$S3_STACK_NAME"; then
-        print_info "删除S3堆栈: $S3_STACK_NAME"
+        print_info "Deleting S3 stack: $S3_STACK_NAME"
         
         if aws cloudformation delete-stack --stack-name "$S3_STACK_NAME"; then
-            print_info "等待堆栈删除完成..."
+            print_info "Waiting for stack deletion completion..."
             
-            # 等待删除完成
-            local timeout=900  # 15分钟
+            # Wait for deletion completion
+            local timeout=900  # 15 minutes
             local elapsed=0
             
             while [[ $elapsed -lt $timeout ]]; do
@@ -312,10 +312,10 @@ s3_storage_cleanup() {
                 status=$(get_stack_status "$S3_STACK_NAME")
                 
                 if [[ "$status" == "DOES_NOT_EXIST" ]]; then
-                    print_success "S3堆栈删除完成"
+                    print_success "S3 stack deletion completed"
                     return 0
                 elif [[ "$status" == "DELETE_FAILED" ]]; then
-                    print_error "S3堆栈删除失败"
+                    print_error "S3 stack deletion failed"
                     return 1
                 fi
                 
@@ -323,31 +323,31 @@ s3_storage_cleanup() {
                 elapsed=$((elapsed + 10))
             done
             
-            print_error "S3堆栈删除超时"
+            print_error "S3 stack deletion timeout"
             return 1
         else
-            print_error "启动S3堆栈删除失败"
+            print_error "Failed to start S3 stack deletion"
             return 1
         fi
     else
-        print_info "S3堆栈不存在，无需删除"
+        print_info "S3 stack does not exist, no deletion needed"
         return 0
     fi
 }
 
 s3_storage_rollback() {
-    print_info "回滚S3存储模块更改"
+    print_info "Rolling back S3 storage module changes"
     
-    # 检查堆栈状态
+    # Check stack status
     local stack_status
     stack_status=$(get_stack_status "$S3_STACK_NAME")
     
     if [[ "$stack_status" == *"FAILED"* ]] || [[ "$stack_status" == *"ROLLBACK"* ]]; then
-        print_info "堆栈已处于失败或回滚状态: $stack_status"
+        print_info "Stack is already in failed or rollback state: $stack_status"
         
-        # 尝试取消更新（如果正在进行中）
+        # Try to cancel update if in progress
         if [[ "$stack_status" == "UPDATE_ROLLBACK_FAILED" ]]; then
-            print_info "尝试继续回滚..."
+            print_info "Trying to continue rollback..."
             
             if aws cloudformation continue-update-rollback --stack-name "$S3_STACK_NAME"; then
                 wait_for_stack_completion "$S3_STACK_NAME"
@@ -357,51 +357,51 @@ s3_storage_rollback() {
         return 0
     fi
     
-    # 如果堆栈正常，但需要回滚到之前的状态，这里可以实现更复杂的逻辑
-    print_info "堆栈状态正常，无需回滚"
+    # If stack is normal but needs rollback to previous state, complex logic can be implemented here
+    print_info "Stack status is normal, no rollback needed"
     return 0
 }
 
 # =============================================================================
-# 可选函数实现
+# Optional function implementations
 # =============================================================================
 
 s3_storage_test() {
-    print_info "测试S3存储模块功能"
+    print_info "Testing S3 storage module functionality"
     
-    # 获取桶名称
+    # Get bucket names
     local buckets
     if ! buckets=$(s3_storage_get_bucket_names); then
-        print_error "无法获取S3桶名称"
+        print_error "Cannot get S3 bucket names"
         return 1
     fi
     
     local test_errors=0
     
-    # 测试每个桶
+    # Test each bucket
     while IFS= read -r bucket; do
         if [[ -n "$bucket" ]]; then
-            print_info "测试桶: $bucket"
+            print_info "Testing bucket: $bucket"
             
-            # 测试桶访问权限
+            # Test bucket access permissions
             if aws s3 ls "s3://$bucket" &>/dev/null; then
-                print_success "✓ 桶访问正常: $bucket"
+                print_success "✓ Bucket access normal: $bucket"
             else
-                print_error "✗ 桶访问失败: $bucket"
+                print_error "✗ Bucket access failed: $bucket"
                 test_errors=$((test_errors + 1))
             fi
             
-            # 测试上传小文件
+            # Test uploading small file
             local test_file="/tmp/s3_test_${RANDOM}.txt"
-            echo "S3测试文件 $(date)" > "$test_file"
+            echo "S3 test file $(date)" > "$test_file"
             
             if aws s3 cp "$test_file" "s3://$bucket/test/" &>/dev/null; then
-                print_success "✓ 桶写入正常: $bucket"
+                print_success "✓ Bucket write normal: $bucket"
                 
-                # 清理测试文件
+                # Clean up test file
                 aws s3 rm "s3://$bucket/test/$(basename "$test_file")" &>/dev/null
             else
-                print_error "✗ 桶写入失败: $bucket"
+                print_error "✗ Bucket write failed: $bucket"
                 test_errors=$((test_errors + 1))
             fi
             
@@ -410,25 +410,25 @@ s3_storage_test() {
     done <<< "$buckets"
     
     if [[ $test_errors -eq 0 ]]; then
-        print_success "S3存储模块功能测试通过"
+        print_success "S3 storage module functionality test passed"
         return 0
     else
-        print_error "S3存储模块功能测试失败，发现 $test_errors 个错误"
+        print_error "S3 storage module functionality test failed, found $test_errors errors"
         return 1
     fi
 }
 
 # =============================================================================
-# 模块特定的辅助函数
+# Module-specific helper functions
 # =============================================================================
 
 s3_storage_get_bucket_names() {
     if ! check_stack_exists "$S3_STACK_NAME"; then
-        print_error "S3堆栈不存在"
+        print_error "S3 stack does not exist"
         return 1
     fi
     
-    # 从堆栈输出获取桶名称
+    # Get bucket names from stack outputs
     aws cloudformation describe-stacks \
         --stack-name "$S3_STACK_NAME" \
         --query 'Stacks[0].Outputs[?contains(OutputKey, `Bucket`)].OutputValue' \
@@ -436,7 +436,7 @@ s3_storage_get_bucket_names() {
 }
 
 s3_storage_check_buckets() {
-    print_info "检查S3桶状态"
+    print_info "Check S3 bucket status"
     
     local buckets
     if buckets=$(s3_storage_get_bucket_names); then
@@ -448,15 +448,15 @@ s3_storage_check_buckets() {
                 total_buckets=$((total_buckets + 1))
                 
                 if check_s3_bucket_exists "$bucket"; then
-                    print_debug "✓ 桶存在: $bucket"
+                    print_debug "✓ Bucket exists: $bucket"
                     healthy_buckets=$((healthy_buckets + 1))
                 else
-                    print_error "✗ 桶不存在: $bucket"
+                    print_error "✗ Bucket does not exist: $bucket"
                 fi
             fi
         done <<< "$buckets"
         
-        print_info "桶状态: $healthy_buckets/$total_buckets 健康"
+        print_info "Bucket status: $healthy_buckets/$total_buckets healthy"
         
         if [[ $healthy_buckets -eq $total_buckets ]]; then
             return 0
@@ -464,22 +464,22 @@ s3_storage_check_buckets() {
             return 1
         fi
     else
-        print_error "无法获取桶名称"
+        print_error "Cannot get bucket names"
         return 1
     fi
 }
 
 s3_storage_empty_buckets() {
-    print_info "清空S3桶内容（包括所有版本）"
+    print_info "Emptying S3 bucket contents (including all versions)"
     
     local buckets
     if buckets=$(s3_storage_get_bucket_names); then
         while IFS= read -r bucket; do
             if [[ -n "$bucket" ]] && check_s3_bucket_exists "$bucket"; then
-                print_info "清空桶: $bucket"
+                print_info "Emptying bucket: $bucket"
                 
-                # 删除所有对象版本
-                print_debug "删除所有对象版本..."
+                # Delete all object versions
+                print_debug "Deleting all object versions..."
                 local versions=$(aws s3api list-object-versions --bucket "$bucket" \
                     --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' \
                     --output json 2>/dev/null || echo '{"Objects": []}')
@@ -488,8 +488,8 @@ s3_storage_empty_buckets() {
                     aws s3api delete-objects --bucket "$bucket" --delete "$versions" >/dev/null || true
                 fi
                 
-                # 删除所有删除标记
-                print_debug "删除所有删除标记..."
+                # Delete all delete markers
+                print_debug "Deleting all delete markers..."
                 local markers=$(aws s3api list-object-versions --bucket "$bucket" \
                     --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' \
                     --output json 2>/dev/null || echo '{"Objects": []}')
@@ -498,11 +498,11 @@ s3_storage_empty_buckets() {
                     aws s3api delete-objects --bucket "$bucket" --delete "$markers" >/dev/null || true
                 fi
                 
-                # 删除任何剩余的当前版本对象
-                print_debug "删除剩余对象..."
+                # Delete any remaining current version objects
+                print_debug "Deleting remaining objects..."
                 aws s3 rm "s3://$bucket" --recursive --force 2>/dev/null || true
                 
-                print_success "桶已清空: $bucket"
+                print_success "Bucket emptied: $bucket"
             fi
         done <<< "$buckets"
     fi
@@ -510,11 +510,11 @@ s3_storage_empty_buckets() {
 
 s3_storage_show_outputs() {
     if ! check_stack_exists "$S3_STACK_NAME"; then
-        print_warning "S3堆栈不存在，无法显示输出"
+        print_warning "S3 stack does not exist, cannot display outputs"
         return 1
     fi
     
-    print_info "S3堆栈输出:"
+    print_info "S3 stack outputs:"
     
     aws cloudformation describe-stacks \
         --stack-name "$S3_STACK_NAME" \
@@ -523,28 +523,28 @@ s3_storage_show_outputs() {
 }
 
 # =============================================================================
-# 如果直接执行此脚本
+# If this script is executed directly
 # =============================================================================
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    # 加载配置
+    # Load configuration
     load_config
     
-    # 加载模块接口
+    # Load module interface
     source "$SCRIPT_DIR/../../lib/interfaces/module_interface.sh"
     
-    # 执行传入的操作
+    # Execute passed operation
     if [[ $# -gt 0 ]]; then
         module_interface "$1" "s3_storage" "${@:2}"
     else
-        echo "用法: $0 <action> [args...]"
-        echo "可用操作: validate, deploy, status, cleanup, rollback, test"
+        echo "Usage: $0 <action> [args...]"
+        echo "Available actions: validate, deploy, status, cleanup, rollback, test"
         echo
-        echo "示例:"
-        echo "  $0 validate     # 验证配置"
-        echo "  $0 deploy       # 部署S3存储"
-        echo "  $0 status       # 检查状态"
-        echo "  $0 test         # 测试功能"
-        echo "  $0 cleanup      # 清理资源"
+        echo "Examples:"
+        echo "  $0 validate     # Validate configuration"
+        echo "  $0 deploy       # Deploy S3 storage"
+        echo "  $0 status       # Check status"
+        echo "  $0 test         # Test functionality"
+        echo "  $0 cleanup      # Clean up resources"
     fi
 fi
