@@ -1,5 +1,5 @@
 #!/bin/bash
-# 日志轮转脚本 - 保留最近7天的日志
+# Log rotation script - Keep logs for the last 7 days
 
 set -e
 
@@ -7,59 +7,59 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 LOG_DIR="$PROJECT_ROOT/logs"
 
-# 设置保留天数
+# Set retention days
 RETENTION_DAYS=7
 
 echo "=========================================="
-echo "日志轮转工具"
+echo "Log Rotation Tool"
 echo "=========================================="
-echo "日志目录: $LOG_DIR"
-echo "保留天数: $RETENTION_DAYS"
-echo "=========================================="
+echo "Log directory: $LOG_DIR"
+echo "Retention days: $RETENTION_DAYS"
+echo "========================================="
 
-# 创建日志目录（如果不存在）
+# Create log directory (if it doesn't exist)
 mkdir -p "$LOG_DIR"
 
-# 统计日志文件
+# Count log files
 total_logs=$(find "$LOG_DIR" -type f -name "*.log" 2>/dev/null | wc -l)
-echo "当前日志文件总数: $total_logs"
+echo "Current total log files: $total_logs"
 
-# 查找并删除超过保留期的日志
+# Find and delete logs beyond retention period
 old_logs=$(find "$LOG_DIR" -type f -name "*.log" -mtime +$RETENTION_DAYS 2>/dev/null | wc -l)
 if [[ $old_logs -gt 0 ]]; then
-    echo "发现 $old_logs 个过期日志文件"
+    echo "Found $old_logs expired log files"
     find "$LOG_DIR" -type f -name "*.log" -mtime +$RETENTION_DAYS -delete
-    echo "已删除过期日志"
+    echo "Expired logs deleted"
 else
-    echo "没有过期的日志文件"
+    echo "No expired log files"
 fi
 
-# 压缩3天前的日志（如果还没压缩）
+# Compress logs older than 3 days (if not already compressed)
 uncompressed_logs=$(find "$LOG_DIR" -type f -name "*.log" -mtime +3 ! -name "*.gz" 2>/dev/null)
 if [[ -n "$uncompressed_logs" ]]; then
-    echo "压缩3天前的日志..."
+    echo "Compressing logs older than 3 days..."
     while IFS= read -r log_file; do
         gzip "$log_file"
-        echo "已压缩: $(basename "$log_file")"
+        echo "Compressed: $(basename "$log_file")"
     done <<< "$uncompressed_logs"
 fi
 
-# 生成日志报告
+# Generate log report
 echo ""
 echo "=========================================="
-echo "日志轮转完成"
+echo "Log rotation completed"
 echo "=========================================="
 
-# 显示当前日志统计
+# Show current log statistics
 current_logs=$(find "$LOG_DIR" -type f \( -name "*.log" -o -name "*.log.gz" \) 2>/dev/null | wc -l)
-echo "当前日志文件数: $current_logs"
+echo "Current log file count: $current_logs"
 
-# 显示磁盘使用情况
+# Show disk usage
 if [[ -d "$LOG_DIR" ]]; then
     log_size=$(du -sh "$LOG_DIR" 2>/dev/null | cut -f1)
-    echo "日志目录大小: $log_size"
+    echo "Log directory size: $log_size"
 fi
 
 echo ""
-echo "提示: 可以将此脚本添加到cron定时任务中自动执行"
-echo "例如: 0 2 * * * $SCRIPT_DIR/rotate-logs.sh"
+echo "Tip: You can add this script to cron for automatic execution"
+echo "Example: 0 2 * * * $SCRIPT_DIR/rotate-logs.sh"
